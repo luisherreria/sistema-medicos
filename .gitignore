@@ -1,0 +1,23 @@
+# Credenciales y configuración local
+config/database.php
+.env
+.env.*
+*.env
+
+# Logs
+storage/logs/*.log
+storage/logs/*.txt
+
+# Archivos temporales / del SO
+Thumbs.db
+desktop.ini
+.DS_Store
+*.lnk
+
+# Notas personales (no son código)
+*.leer
+
+# PHP cache / IDE
+.idea/
+.vscode/
+*.swp

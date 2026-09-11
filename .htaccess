@@ -1,0 +1,23 @@
+Options -Indexes
+
+# ── Codificación UTF-8 por defecto ───────────────────────────────────────
+AddDefaultCharset UTF-8
+
+# ── Seguridad: ocultar archivos sensibles ────────────────────────────────
+<FilesMatch "\.(env|log|sql|bak|ini|json|md|txt)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+# Permitir README.txt de la carpeta pública (no es sensible)
+<Files "README.txt">
+    Allow from all
+</Files>
+
+# ── Proteger carpeta config/ ─────────────────────────────────────────────
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^config/ - [F,L]
+    RewriteRule ^models/ - [F,L]
+    RewriteRule ^controllers/ - [F,L]
+</IfModule>
