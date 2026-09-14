@@ -271,7 +271,7 @@ tailwind.config = { corePlugins: { preflight: false } };
             // ── Período: AAMM → MM/AA ───────────────────────────────────
             var per = (r.COPERIODO || '').trim();
             var perDisplay = per.length === 4
-                ? per.substring(2, 4) + '/' + per.substring(0, 2)   // MM/AA
+                ? per.substring(0, 2) + '/' + per.substring(2, 4)   // AA/MM  (ej: "2607" → "26/07")
                 : per;
 
             // ── N° Factura: suc-nro ─────────────────────────────────────

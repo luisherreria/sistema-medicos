@@ -78,25 +78,54 @@ class RegistrfController
     //  AJAX — BÚSQUEDA PRESTADOR / OBRA SOCIAL  (para modal de ingreso)
     // ══════════════════════════════════════════════════════════════════════
 
-    /** GET ?action=buscar_prestador&q=texto */
+    /** GET ?action=buscar_prestador&q=texto&ocultar_adef=1&ocultar_baja=1 */
     public function buscarPrestador(): void
     {
         $this->requireAuth();
         header('Content-Type: application/json; charset=utf-8');
 
-        $q = trim($_GET['q'] ?? '');
+        $q           = trim($_GET['q'] ?? '');
+        $ocultarAdef = ($_GET['ocultar_adef'] ?? '1') !== '0';
+        $ocultarBaja = ($_GET['ocultar_baja'] ?? '1') !== '0';
+
         if ($q === '') { echo json_encode(['ok' => true, 'datos' => []]); exit; }
 
         try {
-            $val  = '%' . $q . '%';
+            $conds = ['(nombre LIKE :b1 OR codigo LIKE :b2 OR matricula LIKE :b3)'];
+            $params = [
+                ':b1' => '%' . $q . '%',
+                ':b2' => '%' . $q . '%',
+                ':b3' => '%' . $q . '%',
+            ];
+
+            // Ocultar ADEF salvo que se desactive el filtro
+            if ($ocultarAdef) {
+                $conds[] = "TRIM(categ) != 'ADEF'";
+            }
+
+            // Ocultar dados de baja hace más de 180 días
+            if ($ocultarBaja) {
+                $conds[] = "(fechabaja IS NULL"
+                         . " OR fechabaja = '0000-00-00'"
+                         . " OR fechabaja = '0000-00-00 00:00:00'"
+                         . " OR fechabaja > DATE_SUB(CURDATE(), INTERVAL 180 DAY))";
+            }
+
+            $where = 'WHERE ' . implode(' AND ', $conds);
+
             $stmt = $this->db()->prepare(
-                "SELECT TRIM(codigo) AS codigo, TRIM(nombre) AS nombre, TRIM(categ) AS categ
+                "SELECT TRIM(codigo)    AS codigo,
+                        TRIM(nombre)    AS nombre,
+                        TRIM(categ)     AS categ,
+                        TRIM(empresa)   AS empresa,
+                        TRIM(recomenda) AS recomenda,
+                        TRIM(confact)   AS confact,
+                        fechabaja
                  FROM ebamp
-                 WHERE (fechabaja IS NULL OR fechabaja='0000-00-00' OR fechabaja>CURDATE())
-                   AND (nombre LIKE :b1 OR codigo LIKE :b2 OR matricula LIKE :b3)
-                 ORDER BY nombre ASC LIMIT 15"
+                 {$where}
+                 ORDER BY nombre ASC LIMIT 20"
             );
-            $stmt->execute([':b1' => $val, ':b2' => $val, ':b3' => $val]);
+            $stmt->execute($params);
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
             array_walk_recursive($rows, function (&$v) {
                 if (is_string($v)) $v = mb_convert_encoding($v, 'UTF-8', 'UTF-8, ISO-8859-1');
