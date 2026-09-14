@@ -28,7 +28,7 @@ class RegistrfModel
     /** Columnas habilitadas para ordenamiento (lista blanca). */
     private const COLS_SORT = [
         'COPERIODO', 'COOBRASOC', 'COPRESTADO', 'CONOMPREST',
-        'COSUCFAC', 'CONROFAC', 'COFECFAC', 'COFECRECIB',
+        'COSUCFAC', 'CONROFAC', 'COFECFAC',
         'COTOTALFAC', 'COUSUARIO', 'COFECCARGA',
     ];
 
@@ -73,7 +73,6 @@ class RegistrfModel
                     TRIM(COSUCFAC)   AS COSUCFAC,
                     TRIM(CONROFAC)   AS CONROFAC,
                     COFECFAC,
-                    COFECRECIB,
                     COTOTALFAC,
                     TRIM(COUSUARIO)  AS COUSUARIO,
                     COALESCE(
@@ -109,12 +108,12 @@ class RegistrfModel
         $this->db->prepare(
             "INSERT INTO registrf
                 (COFECHA, COPERIODO, COOBRASOC, COCATEG, COPRESTADO, CONOMPREST,
-                 COSUCFAC, CONROFAC, COFECFAC, COFECRECIB, COTIPO,
+                 COSUCFAC, CONROFAC, COFECFAC, COTIPO,
                  COCANTIDAD, COIMPORTE, COIVA, COCOSEGURO, COTOTALFAC,
                  COMONTO, COCANTPREST, COTIENEFAC, COUSUARIO, COFECCARGA)
              VALUES
                 (:fecha,:periodo,:obrasoc,:categ,:prestado,:nomprest,
-                 :sucfac,:nrofac,:fecfac,:fecrecib,:tipo,
+                 :sucfac,:nrofac,:fecfac,:tipo,
                  :cantidad,:importe,:iva,:coseguro,:totalfac,
                  :monto,:cantprest,:tienefac,:usuario,NOW())"
         )->execute($d);

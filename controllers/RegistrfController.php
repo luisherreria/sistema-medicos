@@ -223,7 +223,6 @@ class RegistrfController
                 ':sucfac'   => $cosucfac,
                 ':nrofac'   => $conrofac,
                 ':fecfac'   => $g('COFECFAC')   ?: date('Y-m-d'),
-                ':fecrecib' => $g('COFECRECIB')  ?: date('Y-m-d'),
                 ':tipo'     => $g('COTIPO')       ?: 'F',
                 ':cantidad' => $i('COCANTIDAD'),
                 ':importe'  => $n('COIMPORTE'),

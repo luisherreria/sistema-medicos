@@ -111,7 +111,6 @@ tailwind.config = { corePlugins: { preflight: false } };
             <th class="rf-th sortable" data-col="CONOMPREST"  style="min-width:200px;">PRESTADOR <span class="rf-sort-icon">⇅</span></th>
             <th class="rf-th sortable" data-col="CONROFAC"    style="width:120px;">N° FACTURA <span class="rf-sort-icon">⇅</span></th>
             <th class="rf-th sortable" data-col="COFECFAC"    style="width:95px;">F. FACTURA <span class="rf-sort-icon">⇅</span></th>
-            <th class="rf-th sortable" data-col="COFECRECIB"  style="width:100px;">F. RECIBIDO <span class="rf-sort-icon">⇅</span></th>
             <th class="rf-th sortable" data-col="COTOTALFAC"  style="width:110px;text-align:right;">TOTAL <span class="rf-sort-icon">⇅</span></th>
             <th class="rf-th sortable" data-col="COUSUARIO"   style="width:80px;">USUARIO <span class="rf-sort-icon">⇅</span></th>
             <th class="rf-th sortable" data-col="COFECCARGA"  style="width:110px;">F. CARGA <span class="rf-sort-icon">⇅</span></th>
@@ -281,7 +280,6 @@ tailwind.config = { corePlugins: { preflight: false } };
 
             // ── Fechas dd/mm/yyyy ───────────────────────────────────────
             var fecFac    = fmtFecha(r.COFECFAC);
-            var fecRecib  = fmtFecha(r.COFECRECIB);
             var fecCarga  = fmtFecha(r.COFECCARGA, true);
 
             // ── Total en moneda ─────────────────────────────────────────
@@ -296,7 +294,6 @@ tailwind.config = { corePlugins: { preflight: false } };
                 + '<td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;" title="' + esc(r.CONOMPREST || '') + '">' + esc(r.CONOMPREST || '') + '</td>'
                 + '<td style="font-family:monospace;font-size:.75rem;font-weight:600;">' + esc(factura) + '</td>'
                 + '<td class="td-fecha">' + fecFac + '</td>'
-                + '<td class="td-fecha">' + fecRecib + '</td>'
                 + '<td class="td-total">' + esc(total) + '</td>'
                 + '<td style="font-size:.73rem;color:#64748b;">' + esc(r.COUSUARIO || '') + '</td>'
                 + '<td class="td-fecha">' + fecCarga + '</td>'
