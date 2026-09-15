@@ -128,11 +128,14 @@ switch ($route) {
         $controller = new RegistrfController();
         $action     = trim($_GET['action'] ?? '');
         switch ($action) {
-            case 'listado':          $controller->listado();          break;
-            case 'buscar_prestador': $controller->buscarPrestador();  break;
-            case 'buscar_os':        $controller->buscarObraSocial(); break;
-            case 'guardar':          $controller->guardar();          break;
-            default:                 $controller->index();            break;
+            case 'listado':           $controller->listado();          break;
+            case 'buscar_prestador':  $controller->buscarPrestador();  break;
+            case 'buscar_os':         $controller->buscarObraSocial(); break;
+            case 'os_prestador':      $controller->osDelPrestador();   break;
+            case 'guardar':           $controller->guardar();          break;
+            case 'rpt_prioritarios':  $controller->rptPrioritarios();  break;
+            case 'rpt_recibos':       $controller->rptRecibos();       break;
+            default:                  $controller->index();            break;
         }
         break;
 

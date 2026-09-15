@@ -5,10 +5,9 @@
  * Vista principal: Registración de Facturas
  * Grilla AJAX · paginación · búsqueda · ordenamiento por columna
  *
- * PERÍODO (COPERIODO):
- *   Almacenado como AAMM (ej: 2607 = Julio 2026).
- *   Mostrado como MM/AA (ej: 07/26) — se formatea en JS:
- *     periodo.substring(2,4) + '/' + periodo.substring(0,2)
+     * PERÍODO (COPERIODO):
+     *   Almacenado como AAMM (ej: 2607 = Julio 2026).
+     *   Mostrado como AA/MM (ej: 26/07).
  * ─────────────────────────────────────────────────────────────────────────
  */
 
