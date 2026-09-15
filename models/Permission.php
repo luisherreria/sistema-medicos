@@ -369,6 +369,7 @@ class Permission
             'MNU_CD_PREST_INGRESO'    => 'carga-prestaciones',
             'MNU_CD_PREST_MOD'        => 'mod-prestaciones',
             'MNU_CD_FAC_INGRESO'      => 'registro-facturas',
+            'MNU_REG_FACTURAS'        => 'registro-facturas',
             'MNU_CD_FAC_LST_DET'      => 'listado-detallado-os',
             'MNU_CD_FAC_LST_TOT_AC'   => 'totales-acumulados-os',
             'MNU_CD_FAC_LST_TOT_CMP'  => 'totales-comparados-os',
@@ -504,6 +505,7 @@ class Permission
             'admin'                         => 'Administración',
             'carga-prestaciones'            => 'Ingreso de Prestaciones',
             'registro-facturas'             => 'Registración de Facturas',
+            'mnu-reg-facturas'              => 'Registración de Facturas',
             'carga-diagnosticos'            => 'Carga de Diagnósticos',
             'cierre-periodo'                => 'Cierre de Período',
         ];

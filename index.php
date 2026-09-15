@@ -37,6 +37,7 @@ require_once __DIR__ . '/controllers/AuthController.php';
 require_once __DIR__ . '/controllers/DashboardController.php';
 require_once __DIR__ . '/controllers/PrestadoresController.php';
 require_once __DIR__ . '/controllers/ChatController.php';
+require_once __DIR__ . '/controllers/RegistrfController.php';
 
 // ── 5. Resolución de ruta ─────────────────────────────────────────────────
 $route  = trim($_GET['route'] ?? '');
@@ -116,6 +117,25 @@ switch ($route) {
             case 'send':        $controller->sendMessage();    break;
             case 'saveContact': $controller->saveContact();    break;
             default:            $controller->index();          break;
+        }
+        break;
+
+    // ── Módulo Registración de Facturas (Carga Datos → Registro de Facturas) ──
+    case 'registro-facturas':
+    case 'mnu-reg-facturas':
+    case 'MNU_CD_FAC_INGRESO':
+    case 'MNU_REG_FACTURAS':
+        $controller = new RegistrfController();
+        $action     = trim($_GET['action'] ?? '');
+        switch ($action) {
+            case 'listado':           $controller->listado();          break;
+            case 'buscar_prestador':  $controller->buscarPrestador();  break;
+            case 'buscar_os':         $controller->buscarObraSocial(); break;
+            case 'os_prestador':      $controller->osDelPrestador();   break;
+            case 'guardar':           $controller->guardar();          break;
+            case 'rpt_prioritarios':  $controller->rptPrioritarios();  break;
+            case 'rpt_recibos':       $controller->rptRecibos();       break;
+            default:                  $controller->index();            break;
         }
         break;
 
