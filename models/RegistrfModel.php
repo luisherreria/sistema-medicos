@@ -34,11 +34,16 @@ class RegistrfModel
 
     /**
      * Columnas confirmadas en el listado original (existen en registrf).
-     * El resto (COIMPORTE, COIVA, etc.) es opcional y se omite si no está.
+     * El resto (COIVA, etc.) es opcional y se omite si no está.
      */
     private const COLS_CORE = [
         'COPERIODO', 'COOBRASOC', 'COCATEG', 'COPRESTADO', 'CONOMPREST',
         'COSUCFAC', 'CONROFAC', 'COFECFAC', 'COTOTALFAC', 'COUSUARIO', 'COFECCARGA',
+    ];
+
+    /** Nunca van al INSERT: no existen en registrf (error 1054). */
+    private const COLS_NUNCA = [
+        'COIMPORTE', 'IMPORTE',
     ];
 
     /**
@@ -162,14 +167,16 @@ class RegistrfModel
 
         $existentes = [];
         foreach ($campos as $logico => $valor) {
-            $key = strtoupper($logico);
+            $key = strtoupper((string)$logico);
+            if (in_array($key, self::COLS_NUNCA, true)) {
+                continue;
+            }
             if ($descubiertas) {
                 if (!isset($descubiertas[$key])) {
                     continue;
                 }
                 $existentes[$descubiertas[$key]] = $valor;
             } elseif (in_array($key, self::COLS_CORE, true)) {
-                // Sin catálogo: sólo columnas del listado original (nunca COIMPORTE)
                 $existentes[$key] = $valor;
             }
         }
@@ -188,6 +195,13 @@ class RegistrfModel
     /** @param array<string,mixed> $existentes */
     private function ejecutarInsert(array $existentes): void
     {
+        foreach (self::COLS_NUNCA as $nunca) {
+            foreach (array_keys($existentes) as $col) {
+                if (strtoupper((string)$col) === $nunca) {
+                    unset($existentes[$col]);
+                }
+            }
+        }
         for ($intento = 0; $intento < 20; $intento++) {
             if (!$existentes) {
                 throw new PDOException('No quedan columnas válidas para insertar en registrf.');
@@ -243,7 +257,11 @@ class RegistrfModel
      */
     public function reportePorFlag(string $periodo, string $tipo): array
     {
-        $periodo = strtoupper(trim(str_replace('/', '', $periodo)));
+        $periodoNorm  = strtoupper(trim(str_replace(['/', '-'], '', $periodo)));
+        $periodoSlash = strlen($periodoNorm) === 4
+            ? substr($periodoNorm, 0, 2) . '/' . substr($periodoNorm, 2, 2)
+            : $periodoNorm;
+        $colPer = $this->col('COPERIODO');
         $fechaExpr = $this->tieneColumna('COFECHA')
             ? $this->col('COFECHA')
             : ($this->tieneColumna('COFECFAC') ? $this->col('COFECFAC') : 'NULL');
@@ -251,20 +269,26 @@ class RegistrfModel
 
         $ebamp = $this->columnasEbamp();
         $flags = [];
-        if ($tipo !== 'recibos') {
+        if ($tipo === 'conflicto' && isset($ebamp['conflicto'])) {
+            $flags[] = "TRIM(IFNULL(e.conflicto,'')) NOT IN ('', '0', 'N', 'F')";
+        } elseif ($tipo === 'prioritario') {
             if (isset($ebamp['recomenda']))  $flags[] = "TRIM(IFNULL(e.recomenda,'')) NOT IN ('', '0', 'N', 'F')";
             if (isset($ebamp['conflicto']))  $flags[] = "TRIM(IFNULL(e.conflicto,''))  NOT IN ('', '0', 'N', 'F')";
             if (isset($ebamp['confact']))    $flags[] = "TRIM(IFNULL(e.confact,''))    NOT IN ('', '0', 'N', 'F')";
             if (isset($ebamp['valereci']))   $flags[] = "TRIM(IFNULL(e.valereci,''))   NOT IN ('', '0', 'N', 'F')";
         }
-        if ($tipo === 'conflicto' && isset($ebamp['conflicto'])) {
-            $flags = ["TRIM(IFNULL(e.conflicto,'')) NOT IN ('', '0', 'N', 'F')"];
-        }
 
         $flagSql = $flags ? 'AND (' . implode(' OR ', $flags) . ')' : '';
 
+        $wherePeriodo = "(
+            REPLACE(REPLACE(TRIM(r.{$colPer}), '/', ''), '-', '') = :pnorm
+            OR TRIM(r.{$colPer}) = :pslash
+            OR TRIM(r.{$colPer}) = :pnorm2
+            OR RIGHT(REPLACE(REPLACE(TRIM(r.{$colPer}), '/', ''), '-', ''), 4) = :pnorm3
+        )";
+
         $sql = "SELECT
-                    TRIM(r.{$this->col('COPERIODO')})  AS coperiodo,
+                    TRIM(r.{$colPer})                  AS coperiodo,
                     {$fechaExpr}                       AS cofecha,
                     TRIM(r.{$this->col('COPRESTADO')}) AS coprestado,
                     TRIM(r.{$this->col('CONOMPREST')}) AS conomprest,
@@ -276,18 +300,25 @@ class RegistrfModel
                 LEFT JOIN ebamp e
                     ON TRIM(r.{$this->col('COPRESTADO')}) = TRIM(e.matricula)
                     OR TRIM(r.{$this->col('COPRESTADO')}) = TRIM(e.codigo)
-                WHERE REPLACE(REPLACE(TRIM(r.{$this->col('COPERIODO')}), '/', ''), '-', '') = :periodo
+                WHERE {$wherePeriodo}
                   {$flagSql}
                 ORDER BY r.{$this->col('CONOMPREST')} ASC";
 
+        $bind = [
+            ':pnorm'  => $periodoNorm,
+            ':pslash' => $periodoSlash,
+            ':pnorm2' => $periodoNorm,
+            ':pnorm3' => $periodoNorm,
+        ];
+
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([':periodo' => $periodo]);
+        $stmt->execute($bind);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // Si el filtro de flags no trajo nada, mostrar todas las facturas del período
+        // Si el filtro de flags no trajo nada, listar todas las facturas del período
         if (!$rows && $tipo !== 'recibos' && $flagSql !== '') {
             $stmt = $this->db->prepare(str_replace($flagSql, '', $sql));
-            $stmt->execute([':periodo' => $periodo]);
+            $stmt->execute($bind);
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
 

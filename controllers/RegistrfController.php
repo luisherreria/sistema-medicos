@@ -91,14 +91,23 @@ class RegistrfController
 
         try {
             if ($exact) {
+                $qNorm = strtoupper(str_replace(['-', ' ', '/'], '', $q));
                 $stmt = $this->db()->prepare(
                     "SELECT {$cols}
                      FROM ebamp
                      WHERE TRIM(codigo) = :cod OR TRIM(matricula) = :mat
+                        OR REPLACE(REPLACE(REPLACE(TRIM(codigo), '-', ''), ' ', ''), '/', '') = :norm1
+                        OR REPLACE(REPLACE(REPLACE(TRIM(matricula), '-', ''), ' ', ''), '/', '') = :norm2
                      ORDER BY CASE WHEN TRIM(codigo) = :cod2 THEN 0 ELSE 1 END
                      LIMIT 1"
                 );
-                $stmt->execute([':cod' => $q, ':mat' => $q, ':cod2' => $q]);
+                $stmt->execute([
+                    ':cod'   => $q,
+                    ':mat'   => $q,
+                    ':cod2'  => $q,
+                    ':norm1' => $qNorm,
+                    ':norm2' => $qNorm,
+                ]);
             } else {
                 $conds = ['(nombre LIKE :b1 OR codigo LIKE :b2 OR matricula LIKE :b3)'];
                 $params = [
@@ -308,13 +317,14 @@ class RegistrfController
             $fecRecib  = $g('COFECRECIB') ?: $fecha;
             $total     = $n('COTOTALFAC');
             if ($total <= 0) {
-                $total = $n('COIMPORTE') + $n('COIVA') + $n('COCOSEGURO');
+                $importe = $n('IMPORTE') ?: $n('COIMPORTE');
+                $total   = $importe + $n('COIVA') + $n('COCOSEGURO');
             }
 
             require_once __DIR__ . '/../models/RegistrfModel.php';
             $model = new RegistrfModel();
 
-            // Mapa lógico → valor. insertar() descarta columnas que no existan.
+            // Nunca incluir COIMPORTE: esa columna no existe en registrf (1054).
             $model->insertar([
                 'COFECHA'     => $fecha,
                 'COPERIODO'   => $periodo,
@@ -328,7 +338,6 @@ class RegistrfController
                 'COTOTALFAC'  => $total,
                 'COUSUARIO'   => $usr,
                 'COFECCARGA'  => date('Y-m-d H:i:s'),
-                // opcionales: insertar() las descarta si no existen (1054 COIMPORTE)
                 'COFECRECIB'  => $fecRecib,
                 'COTIPO'      => $g('COTIPO') ?: 'F',
                 'COCANTIDAD'  => $i('COCANTIDAD'),
@@ -355,6 +364,7 @@ class RegistrfController
     public function rptPrioritarios(): void
     {
         $this->requireAuth();
+        $this->requirePermiso('MNU_CD_FAC_INGRESO');
 
         $periodo = strtoupper(trim(str_replace('/', '', $_GET['periodo'] ?? '')));
         $tipo    = trim($_GET['tipo'] ?? 'prioritario');
@@ -396,6 +406,7 @@ class RegistrfController
     public function rptRecibos(): void
     {
         $this->requireAuth();
+        $this->requirePermiso('MNU_CD_FAC_INGRESO');
 
         $periodo = strtoupper(trim(str_replace('/', '', $_GET['periodo'] ?? '')));
         $asJson  = ($_GET['format'] ?? '') === 'json';
@@ -456,7 +467,10 @@ class RegistrfController
         $have = [];
         try {
             foreach ($this->db()->query('SHOW COLUMNS FROM ebamp') as $row) {
-                $have[strtolower((string)$row['Field'])] = true;
+                $name = (string)($row['Field'] ?? $row['field'] ?? $row['FIELD'] ?? '');
+                if ($name !== '') {
+                    $have[strtolower($name)] = true;
+                }
             }
         } catch (PDOException $e) {
             $sql = implode(",\n                 ", array_values($wanted));
@@ -628,6 +642,7 @@ class RegistrfController
 
     private function jsonError(string $msg): never
     {
+        header('Content-Type: application/json; charset=utf-8');
         http_response_code(400);
         echo json_encode(['ok' => false, 'error' => $msg], JSON_UNESCAPED_UNICODE);
         exit;

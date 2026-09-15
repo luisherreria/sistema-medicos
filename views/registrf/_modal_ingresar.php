@@ -13,7 +13,7 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
      data-bs-backdrop="static" data-bs-keyboard="false">
 
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-    <div class="modal-content" style="border-radius:10px; overflow:hidden;">
+    <div class="modal-content" style="border-radius:10px; overflow:hidden; position:relative;">
 
         <div class="modal-header py-2 px-4"
              style="background:linear-gradient(90deg,#0d47a1,#1976d2); color:#fff; border-bottom:none;">
@@ -70,7 +70,8 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
                     <input type="text" id="fac-coprestado" name="COPRESTADO"
                            class="form-control rf-inp"
                            style="max-width:110px; font-family:monospace; font-weight:700;"
-                           placeholder="Código" maxlength="15">
+                           placeholder="Código" maxlength="15"
+                           data-next="fac-coobrasoc">
                     <input type="text" id="fac-prest-nombre-display"
                            class="form-control rf-inp"
                            style="background:#e8f4fd; color:#1e293b;"
@@ -194,7 +195,7 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
                 <div class="rf-imp-row">
                     <span class="rf-imp-lbl">Importe :</span>
                     <span class="rf-imp-pref">$</span>
-                    <input type="number" id="fac-coimporte" name="COIMPORTE"
+                    <input type="number" id="fac-coimporte" name="IMPORTE"
                            class="form-control form-control-sm rf-inp text-end rf-num fac-calc"
                            min="0" step="0.01" value="" placeholder="0,00" data-next="fac-coiva">
                 </div>
@@ -264,6 +265,8 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
             </div>
         </div>
 
+        <div id="fac-msg-vfp" class="alert alert-warning d-none mt-3 py-2 px-3"
+             style="font-size:.82rem; border-radius:8px;"></div>
         <div id="fac-alert" class="alert alert-danger d-none mt-3 py-2 px-3"
              style="font-size:.82rem; border-radius:8px;">
             <i class="fa-solid fa-triangle-exclamation me-1"></i>
@@ -303,28 +306,20 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
             </div>
         </div>
 
-    </div>
-    </div>
-</div>
-
-<!-- Reporte en la misma pantalla (no depende de popups) -->
-<div class="modal fade" id="modalReporteRf" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header py-2" style="background:#1e293b;color:#fff;">
-                <h6 class="modal-title mb-0" id="rf-rpt-titulo">Reporte</h6>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        <div id="rf-rpt-overlay">
+            <div class="rf-rpt-head">
+                <h6 class="mb-0" id="rf-rpt-titulo">Reporte</h6>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-light" id="rf-rpt-print">
+                        <i class="fa-solid fa-print me-1"></i>Imprimir
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-light" id="rf-rpt-cerrar">Cerrar</button>
+                </div>
             </div>
-            <div class="modal-body p-0">
-                <div id="rf-rpt-body" style="min-height:200px;"></div>
-            </div>
-            <div class="modal-footer py-2">
-                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
-                <button type="button" class="btn btn-sm btn-primary" id="rf-rpt-print">
-                    <i class="fa-solid fa-print me-1"></i>Imprimir
-                </button>
-            </div>
+            <div id="rf-rpt-body"></div>
         </div>
+
+    </div>
     </div>
 </div>
 
@@ -376,7 +371,26 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
     letter-spacing: .4px;
     line-height: 1.25;
 }
-#modalReporteRf { z-index: 2000 !important; }
+#rf-rpt-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    background: #fff;
+    flex-direction: column;
+}
+#rf-rpt-overlay.abierto { display: flex; }
+.rf-rpt-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 16px;
+    background: #1e293b;
+    color: #fff;
+    flex-shrink: 0;
+}
+#rf-rpt-body { flex: 1; overflow: auto; min-height: 0; }
 </style>
 
 <script>
@@ -385,6 +399,7 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
 
     var ROUTE = 'registro-facturas';
     var osDelPrestador = [];
+    var pendientesAlertas = [];
 
     window.abrirModalIngresarFactura = function () {
         resetFac();
@@ -428,6 +443,10 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
         document.getElementById('fac-tipo-fisica').checked  = true;
         document.getElementById('fac-tienefac-si').checked  = true;
         setLeyendas(false, false, false);
+        pendientesAlertas = [];
+        var box = document.getElementById('fac-msg-vfp');
+        if (box) { box.classList.add('d-none'); box.textContent = ''; }
+        document.getElementById('rf-rpt-overlay').classList.remove('abierto');
         ocultarAlertFac();
         ocultarSuggsPrest();
         ocultarSuggsOS();
@@ -481,28 +500,68 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
         if (el.select) el.select();
     }
 
-    document.getElementById('form-ingresar-factura').addEventListener('keydown', function (e) {
+    function avanzarDesdePrestador() {
+        var osCod = document.getElementById('fac-coobrasoc').value.trim();
+        var osNom = document.getElementById('fac-os-nombre-display').value.trim();
+        if (osCod && osNom) {
+            focusId('fac-cosucfac');
+        } else {
+            focusId('fac-coobrasoc');
+        }
+    }
+
+    function flushAlertasPrestador() {
+        if (!pendientesAlertas.length) return;
+        var msgs = pendientesAlertas.slice();
+        pendientesAlertas = [];
+        msgs.forEach(function (msg) { window.alert(msg); });
+        avanzarDesdePrestador();
+    }
+
+    function onEnterPrestador(e) {
         if (e.key !== 'Enter') return;
         e.preventDefault();
         e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        clearTimeout(prestTimer);
         var id = e.target.id;
-
-        if (id === 'fac-coprestado' || id === 'fac-prest-nombre-display') {
-            var wrap = document.getElementById('fac-prest-suggs-wrap');
+        if (id === 'fac-prest-nombre-display') {
             var first = document.querySelector('#fac-prest-suggs a.list-group-item');
-            if (wrap && wrap.style.display !== 'none' && first) {
+            if (first) {
                 first.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-                setTimeout(function () { focusId('fac-coobrasoc'); }, 30);
                 return;
             }
-            if (document.getElementById('fac-prest-nombre-display').value.trim()
-                && document.getElementById('fac-coprestado').value.trim()) {
-                focusId('fac-coobrasoc');
-                return;
-            }
-            resolverPrestadorExacto(function () { focusId('fac-coobrasoc'); });
+        }
+        ocultarSuggsPrest();
+        var cod = document.getElementById('fac-coprestado').value.trim();
+        var nom = document.getElementById('fac-prest-nombre-display').value.trim();
+        if (!cod) return;
+        if (nom) {
+            avanzarDesdePrestador();
+            flushAlertasPrestador();
             return;
         }
+        resolverPrestadorExacto(function (ok) {
+            if (!ok && !document.getElementById('fac-prest-nombre-display').value.trim()) {
+                mostrarAlertFac('Prestador no encontrado. Verificá el código.');
+                focusId('fac-coprestado');
+                return;
+            }
+            avanzarDesdePrestador();
+            flushAlertasPrestador();
+        });
+    }
+
+    document.getElementById('fac-coprestado').addEventListener('keydown', onEnterPrestador, true);
+    document.getElementById('fac-prest-nombre-display').addEventListener('keydown', onEnterPrestador, true);
+
+    document.getElementById('form-ingresar-factura').addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter') return;
+        var id = e.target.id;
+        if (id === 'fac-coprestado' || id === 'fac-prest-nombre-display') return;
+        e.preventDefault();
+        e.stopPropagation();
+
         if (id === 'fac-coobrasoc') {
             var osWrap = document.getElementById('fac-os-suggs');
             var osFirst = osWrap ? osWrap.querySelector('a.list-group-item') : null;
@@ -543,7 +602,15 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
         if (fact) msgs.push('Prestador Con Factura, Verificar que la haya entregado, Gracias');
         if (vale) msgs.push('Prestador Factura vale como Recibo,Gracias');
         setLeyendas(prio, fact, vale);
-        msgs.forEach(function (msg) { window.alert(msg); });
+        pendientesAlertas = msgs;
+        var box = document.getElementById('fac-msg-vfp');
+        if (msgs.length) {
+            box.textContent = msgs.join('  ·  ');
+            box.classList.remove('d-none');
+        } else {
+            box.classList.add('d-none');
+            box.textContent = '';
+        }
     }
 
     var prestTimer;
@@ -587,7 +654,7 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
                     + (r.categ ? ' <span class="badge bg-secondary bg-opacity-40 ms-1" style="font-size:.62rem;">' + esc(r.categ) + '</span>' : '');
                 a.addEventListener('mousedown', function (e) {
                     e.preventDefault();
-                    seleccionarPrestador(r);
+                    seleccionarPrestador(r, true);
                 });
                 $list.appendChild(a);
             });
@@ -595,7 +662,7 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
         $wrap.style.display = 'block';
     }
 
-    function seleccionarPrestador(r) {
+    function seleccionarPrestador(r, avanzar) {
         document.getElementById('fac-coprestado').value           = r.codigo || r.matricula || '';
         document.getElementById('fac-prest-nombre-display').value = r.nombre || '';
         document.getElementById('fac-conomprest').value           = r.nombre || '';
@@ -608,6 +675,10 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
         ocultarSuggsPrest();
         alertaSeleccionPrestador(r);
         completarObrasSociales(r.codigo || r.matricula || '');
+        if (avanzar) {
+            avanzarDesdePrestador();
+            flushAlertasPrestador();
+        }
     }
 
     function completarObrasSociales(codigo) {
@@ -631,18 +702,20 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
 
     function resolverPrestadorExacto(done) {
         var cod = document.getElementById('fac-coprestado').value.trim();
-        if (!cod) { if (done) done(); return; }
+        if (!cod) { if (done) done(false); return; }
         fetch('index.php?route=' + ROUTE + '&action=buscar_prestador'
               + '&q=' + encodeURIComponent(cod) + '&exact=1&ocultar_adef=0&ocultar_baja=0',
               { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
         .then(function (r) { return r.json(); })
         .then(function (res) {
             if (res.ok && res.datos && res.datos.length === 1) {
-                seleccionarPrestador(res.datos[0]);
+                seleccionarPrestador(res.datos[0], false);
+                if (done) done(true);
+                return;
             }
-            if (done) done();
+            if (done) done(false);
         })
-        .catch(function () { if (done) done(); });
+        .catch(function () { if (done) done(false); });
     }
 
     function ocultarSuggsPrest() {
@@ -803,7 +876,11 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
         fetch('index.php?route=' + ROUTE + '&action=guardar', {
             method: 'POST',
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            body: new FormData(document.getElementById('form-ingresar-factura'))
+            body: (function () {
+                var fd = new FormData(document.getElementById('form-ingresar-factura'));
+                fd.delete('COIMPORTE');
+                return fd;
+            })()
         })
         .then(function (r) { return r.json().then(function (j) { return { okHttp: r.ok, json: j }; }); })
         .then(function (pack) {
@@ -835,20 +912,27 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
             document.getElementById('fac-coperiodo-display').focus();
             return;
         }
+        var overlay = document.getElementById('rf-rpt-overlay');
+        var $body = document.getElementById('rf-rpt-body');
+        var $tit  = document.getElementById('rf-rpt-titulo');
+        $tit.textContent = titulo || 'Reporte';
+        $body.innerHTML = '<div class="text-center py-5 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>Generando…</div>';
+        overlay.classList.add('abierto');
+
         var url = 'index.php?route=' + ROUTE + '&action=' + action
             + '&periodo=' + encodeURIComponent(per)
             + '&format=json';
         if (extra) url += extra;
 
-        var $body = document.getElementById('rf-rpt-body');
-        var $tit  = document.getElementById('rf-rpt-titulo');
-        $tit.textContent = titulo || 'Reporte';
-        $body.innerHTML = '<div class="text-center py-5 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>Generando…</div>';
-        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalReporteRf')).show();
-
-        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-            .then(function (r) { return r.json(); })
-            .then(function (res) {
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+            .then(function (r) { return r.text().then(function (t) { return { okHttp: r.ok, t: t }; }); })
+            .then(function (pack) {
+                var res;
+                try { res = JSON.parse(pack.t); }
+                catch (err) {
+                    $body.innerHTML = '<div class="alert alert-danger m-3">No se pudo leer el reporte. Recargá la página e intentá de nuevo.</div>';
+                    return;
+                }
                 if (!res.ok) {
                     $body.innerHTML = '<div class="alert alert-danger m-3">' + esc(res.error || 'No se pudo generar el reporte.') + '</div>';
                     return;
@@ -858,7 +942,7 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
                 var html = '<div class="px-3 pt-3 pb-1 text-muted" style="font-size:.78rem;">Período <strong>'
                     + esc(perDisp) + '</strong> · ' + rows.length + ' registro(s)</div>';
                 if (!rows.length) {
-                    html += '<div class="text-center text-muted py-5">No hay facturas para este período.</div>';
+                    html += '<div class="text-center text-muted py-5">No hay facturas para el período ' + esc(perDisp) + '.</div>';
                 } else {
                     html += '<div class="table-responsive"><table class="table table-sm table-striped mb-0" style="font-size:.8rem;">'
                         + '<thead style="background:#1e293b;color:#fff;"><tr>'
@@ -866,7 +950,7 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
                         + '</tr></thead><tbody>';
                     rows.forEach(function (r) {
                         html += '<tr>'
-                            + '<td class="font-monospace">' + esc(perDisp) + '</td>'
+                            + '<td class="font-monospace">' + esc(r.coperiodo || perDisp) + '</td>'
                             + '<td class="font-monospace">' + esc(fmtRptFecha(r.cofecha)) + '</td>'
                             + '<td class="font-monospace">' + esc(r.coprestado || '') + '</td>'
                             + '<td>' + esc(r.conomprest || r.nombre_ebamp || '') + '</td>'
@@ -898,6 +982,9 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
     });
     document.getElementById('fac-btn-rpt-recibos').addEventListener('click', function () {
         abrirReporte('rpt_recibos', '', 'Recibos Ingresados');
+    });
+    document.getElementById('rf-rpt-cerrar').addEventListener('click', function () {
+        document.getElementById('rf-rpt-overlay').classList.remove('abierto');
     });
     document.getElementById('rf-rpt-print').addEventListener('click', function () {
         var html = document.getElementById('rf-rpt-body').innerHTML;
