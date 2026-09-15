@@ -79,8 +79,10 @@ $periodoActual = date('ym'); // ej: 2608
                 <label class="rf-lbl">Fecha :</label>
                 <input type="date" id="fac-cofecha" name="COFECHA"
                        class="form-control form-control-sm rf-inp"
-                       style="width:130px;"
+                       style="width:130px; background:#e8f4fd; cursor:default;"
                        value="<?= date('Y-m-d') ?>"
+                       readonly
+                       tabindex="-1"
                        data-next="fac-coperiodo-display">
             </div>
 
@@ -265,11 +267,15 @@ $periodoActual = date('ym'); // ej: 2608
                     <tr>
                         <td class="rf-td-label">Cantidad :</td>
                         <td>
-                            <input type="number" id="fac-cocantidad" name="COCANTIDAD"
-                                   class="form-control form-control-sm rf-inp text-end rf-num"
-                                   style="width:120px;"
-                                   min="0" step="1" value="0"
-                                   data-next="fac-coimporte">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text px-1 rf-prefix"
+                                      style="visibility:hidden;">$</span>
+                                <input type="number" id="fac-cocantidad" name="COCANTIDAD"
+                                       class="form-control rf-inp text-end rf-num"
+                                       style="width:112px;"
+                                       min="0" step="1" value="0"
+                                       data-next="fac-coimporte">
+                            </div>
                         </td>
                     </tr>
                     <tr>
@@ -495,7 +501,7 @@ $periodoActual = date('ym'); // ej: 2608
         bootstrap.Modal.getOrCreateInstance(
             document.getElementById('modalIngresarFactura')
         ).show();
-        setTimeout(function () { document.getElementById('fac-cofecha').focus(); }, 320);
+        setTimeout(function () { document.getElementById('fac-coperiodo-display').focus(); }, 320);
     };
 
     function resetFac() {
@@ -522,6 +528,7 @@ $periodoActual = date('ym'); // ej: 2608
         document.getElementById('fac-cosucfac').value             = '';
         document.getElementById('fac-conrofac').value             = '';
         // Fechas
+        // Fecha se actualiza sola a hoy (readonly)
         var hoy = new Date().toISOString().substring(0, 10);
         document.getElementById('fac-cofecha').value    = hoy;
         document.getElementById('fac-cofecrecib').value = hoy;
@@ -712,6 +719,25 @@ $periodoActual = date('ym'); // ej: 2608
         if (this.value.trim().length >= 2) buscarPrestador(this.value);
     });
 
+    // ── Auto-resolve exacto al salir del campo código (blur) ──────────────
+    $inpPrest.addEventListener('blur', function () {
+        var cod = this.value.trim();
+        if (!cod) return;
+        // Si ya se llenó el nombre, no buscar de nuevo
+        if (document.getElementById('fac-prest-nombre-display').value.trim()) return;
+        // Búsqueda exacta por código (sin filtros de ADEF/baja para no bloquear)
+        fetch('index.php?route=registro-facturas&action=buscar_prestador'
+              + '&q=' + encodeURIComponent(cod) + '&exact=1&ocultar_adef=0&ocultar_baja=0',
+              { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+            if (res.ok && res.datos && res.datos.length === 1) {
+                seleccionarPrestador(res.datos[0]);
+            }
+        })
+        .catch(function () {});
+    });
+
     // También buscar por nombre desde el campo de nombre
     document.getElementById('fac-prest-nombre-display').addEventListener('click', function () {
         this.removeAttribute('readonly');
@@ -775,6 +801,25 @@ $periodoActual = date('ym'); // ej: 2608
     $inpOS.addEventListener('input', function () { buscarOS(this.value.trim()); });
     $inpOS.addEventListener('focus', function () {
         if (this.value.trim().length >= 1) buscarOS(this.value.trim());
+    });
+
+    // ── Auto-resolve exacto al salir del campo código OS (blur) ──────────
+    $inpOS.addEventListener('blur', function () {
+        var cod = this.value.trim();
+        if (!cod) return;
+        if (document.getElementById('fac-os-nombre-display').value.trim()) return;
+        fetch('index.php?route=registro-facturas&action=buscar_os'
+              + '&q=' + encodeURIComponent(cod) + '&exact=1',
+              { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+            if (res.ok && res.datos && res.datos.length === 1) {
+                document.getElementById('fac-coobrasoc').value         = res.datos[0].cosoc;
+                document.getElementById('fac-os-nombre-display').value = res.datos[0].nombre;
+                ocultarSuggsOS();
+            }
+        })
+        .catch(function () {});
     });
 
     // Cerrar sugerencias al click fuera

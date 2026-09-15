@@ -85,12 +85,36 @@ class RegistrfController
         header('Content-Type: application/json; charset=utf-8');
 
         $q           = trim($_GET['q'] ?? '');
+        $exact       = ($_GET['exact'] ?? '0') === '1';
         $ocultarAdef = ($_GET['ocultar_adef'] ?? '1') !== '0';
         $ocultarBaja = ($_GET['ocultar_baja'] ?? '1') !== '0';
 
         if ($q === '') { echo json_encode(['ok' => true, 'datos' => []]); exit; }
 
         try {
+            $cols = "TRIM(codigo)    AS codigo,
+                     TRIM(nombre)    AS nombre,
+                     TRIM(categ)     AS categ,
+                     TRIM(empresa)   AS empresa,
+                     TRIM(recomenda) AS recomenda,
+                     TRIM(confact)   AS confact,
+                     fechabaja";
+
+            // ── Búsqueda exacta por código (llamada desde blur del input) ──
+            if ($exact) {
+                $stmt = $this->db()->prepare(
+                    "SELECT {$cols} FROM ebamp WHERE TRIM(codigo) = :cod LIMIT 1"
+                );
+                $stmt->execute([':cod' => $q]);
+                $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                array_walk_recursive($rows, function (&$v) {
+                    if (is_string($v)) $v = mb_convert_encoding($v, 'UTF-8', 'UTF-8, ISO-8859-1');
+                });
+                echo json_encode(['ok' => true, 'datos' => $rows], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+
+            // ── Búsqueda por texto (autocomplete) ─────────────────────────
             $conds = ['(nombre LIKE :b1 OR codigo LIKE :b2 OR matricula LIKE :b3)'];
             $params = [
                 ':b1' => '%' . $q . '%',
@@ -98,12 +122,9 @@ class RegistrfController
                 ':b3' => '%' . $q . '%',
             ];
 
-            // Ocultar ADEF salvo que se desactive el filtro
             if ($ocultarAdef) {
                 $conds[] = "TRIM(categ) != 'ADEF'";
             }
-
-            // Ocultar dados de baja hace más de 180 días
             if ($ocultarBaja) {
                 $conds[] = "(fechabaja IS NULL"
                          . " OR fechabaja = '0000-00-00'"
@@ -111,19 +132,9 @@ class RegistrfController
                          . " OR fechabaja > DATE_SUB(CURDATE(), INTERVAL 180 DAY))";
             }
 
-            $where = 'WHERE ' . implode(' AND ', $conds);
-
             $stmt = $this->db()->prepare(
-                "SELECT TRIM(codigo)    AS codigo,
-                        TRIM(nombre)    AS nombre,
-                        TRIM(categ)     AS categ,
-                        TRIM(empresa)   AS empresa,
-                        TRIM(recomenda) AS recomenda,
-                        TRIM(confact)   AS confact,
-                        fechabaja
-                 FROM ebamp
-                 {$where}
-                 ORDER BY nombre ASC LIMIT 20"
+                "SELECT {$cols} FROM ebamp WHERE " . implode(' AND ', $conds)
+                . " ORDER BY nombre ASC LIMIT 20"
             );
             $stmt->execute($params);
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -143,10 +154,28 @@ class RegistrfController
         $this->requireAuth();
         header('Content-Type: application/json; charset=utf-8');
 
-        $q = trim($_GET['q'] ?? '');
+        $q     = trim($_GET['q'] ?? '');
+        $exact = ($_GET['exact'] ?? '0') === '1';
         if ($q === '') { echo json_encode(['ok' => true, 'datos' => []]); exit; }
 
         try {
+            // ── Búsqueda exacta por código ────────────────────────────────
+            if ($exact) {
+                $stmt = $this->db()->prepare(
+                    "SELECT TRIM(TACODIGO) AS cosoc, TRIM(TADESCRIP) AS nombre
+                     FROM obrasoc
+                     WHERE TRIM(TACODIGO) = :cod LIMIT 1"
+                );
+                $stmt->execute([':cod' => $q]);
+                $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                array_walk_recursive($rows, function (&$v) {
+                    if (is_string($v)) $v = mb_convert_encoding($v, 'UTF-8', 'UTF-8, ISO-8859-1');
+                });
+                echo json_encode(['ok' => true, 'datos' => $rows], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+
+            // ── Autocomplete ──────────────────────────────────────────────
             $val  = '%' . $q . '%';
             $stmt = $this->db()->prepare(
                 "SELECT TRIM(TACODIGO) AS cosoc, TRIM(TADESCRIP) AS nombre
