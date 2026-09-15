@@ -226,7 +226,7 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
             <div class="rf-imp-col">
                 <div class="rf-imp-row">
                     <span class="rf-imp-lbl">$ :</span>
-                    <span class="rf-imp-pref">$</span>
+                    <span class="rf-imp-pref"></span>
                     <input type="number" id="fac-comonto" name="COMONTO"
                            class="form-control form-control-sm rf-inp text-end rf-num"
                            min="0" step="0.01" value="" placeholder="0,00" data-next="fac-cocantprest">
