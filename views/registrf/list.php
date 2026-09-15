@@ -197,7 +197,7 @@ tailwind.config = { corePlugins: { preflight: false } };
         busqueda : '',
         pagina   : 1,
         porPag   : 50,
-        orderCol : 'COFECCARGA',
+        orderCol : 'COPERIODO',
         orderDir : 'DESC',
         total    : 0,
         paginas  : 1,
@@ -358,7 +358,6 @@ tailwind.config = { corePlugins: { preflight: false } };
         var $th = document.querySelector('.rf-th[data-col="' + state.orderCol + '"]');
         if ($th) $th.classList.add('sort-desc');
     })();
-
     // ══════════════════════════════════════════════════════════════════════
     //  BOTONES DE ACCIÓN
     // ══════════════════════════════════════════════════════════════════════

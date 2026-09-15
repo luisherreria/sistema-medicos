@@ -136,12 +136,24 @@ class RegistrfModel
 
     private function resolverOrderExpr(string $col, string $dir): string
     {
-        $col = in_array($col, self::COLS_SORT, true) ? $col : 'COFECCARGA';
+        $col = in_array($col, self::COLS_SORT, true) ? $col : 'COPERIODO';
         $dir = strtoupper($dir) === 'ASC' ? 'ASC' : 'DESC';
 
+        // Orden primario
         if ($col === 'COFECCARGA') {
-            return "COALESCE(NULLIF(COFECCARGA,'0000-00-00 00:00:00'),COFECFAC) {$dir}";
+            $primary = "COALESCE(NULLIF(COFECCARGA,'0000-00-00 00:00:00'),COFECFAC) {$dir}";
+        } else {
+            $primary = "{$col} {$dir}";
         }
-        return "{$col} {$dir}";
+
+        // Orden secundario fijo: Período DESC → Prestador ASC → Obra Social ASC
+        // (se omite la columna ya usada como primaria para no repetir)
+        $secondary = [];
+        if ($col !== 'COPERIODO')   $secondary[] = 'COPERIODO DESC';
+        if ($col !== 'CONOMPREST')  $secondary[] = 'CONOMPREST ASC';
+        if ($col !== 'COOBRASOC')   $secondary[] = 'COOBRASOC ASC';
+
+        $parts = array_merge([$primary], $secondary);
+        return implode(', ', $parts);
     }
 }
