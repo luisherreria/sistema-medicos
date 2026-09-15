@@ -161,14 +161,15 @@
             color: #c62828 !important;
         }
 
-        /* ── Acordeón multinivel: Nivel 1 (categorías) ──────────────────── */
-        #offcanvasMenu .accordion-item {
-            border: none;
-            border-radius: 0 !important;
+        /* ── Categorías del menú (sin Bootstrap Collapse: no se traba) ─── */
+        .menu-cat {
             border-bottom: 1px solid #e5eaf2;
         }
 
-        #offcanvasMenu .accordion-button {
+        .menu-cat-btn {
+            display: flex;
+            align-items: center;
+            width: 100%;
             padding: 10px 16px;
             font-size: 0.78rem;
             font-weight: 700;
@@ -176,26 +177,41 @@
             text-transform: uppercase;
             color: #1565c0;
             background: #f0f4fb;
+            border: none;
             box-shadow: none;
+            cursor: pointer;
+            text-align: left;
         }
 
-        #offcanvasMenu .accordion-button:not(.collapsed) {
+        .menu-cat-btn[aria-expanded="true"] {
             color: #0d47a1;
             background: #dbeafe;
-            box-shadow: none;
         }
 
-        #offcanvasMenu .accordion-button::after {
-            width: 14px;
-            height: 14px;
-            background-size: 14px;
-            margin-left: auto;
+        .menu-cat-btn:hover {
+            background: #e3eefc;
+        }
+
+        .menu-cat-btn .menu-cat-chevron {
+            font-size: 0.7rem;
+            color: #90a4ae;
+            margin-left: 4px;
+            transition: transform 0.15s;
             flex-shrink: 0;
         }
 
-        #offcanvasMenu .accordion-body {
-            padding: 0;
+        .menu-cat-btn[aria-expanded="true"] .menu-cat-chevron {
+            transform: rotate(180deg);
+            color: #1565c0;
+        }
+
+        .menu-cat-body {
+            display: none;
             background: #fafbfd;
+        }
+
+        .menu-cat-body.is-open {
+            display: block;
         }
 
         /* ── Submenú colapsable: Nivel 2 header ─────────────────────────── */
@@ -251,6 +267,7 @@
             border-bottom: 1px solid #eaeff5;
             transition: background 0.12s, color 0.12s;
             font-size: 0.845rem;
+            cursor: pointer;
         }
 
         .menu-item:hover,
@@ -455,7 +472,7 @@ $initials     = strtoupper(
 
         <!-- ── Dashboard — siempre visible en la cima ───────────────────── -->
         <a href="index.php?route=dashboard"
-           class="menu-item menu-nav-link<?= ($routeActual === 'dashboard' || $routeActual === '') ? ' active' : '' ?>"
+           class="menu-item<?= ($routeActual === 'dashboard' || $routeActual === '') ? ' active' : '' ?>"
            style="padding:10px 16px; font-weight:700;
                   background:#eef2fb; border-bottom:2px solid #d0daf0;">
             <span class="menu-icon">
@@ -464,17 +481,16 @@ $initials     = strtoupper(
             <span class="menu-label">Dashboard</span>
         </a>
 
-        <!-- ── Acordeón de categorías (1 abierto a la vez) ──────────────── -->
+        <!-- ── Categorías (un grupo abierto a la vez, sin Collapse de BS) ── -->
         <?php if (!empty($gruposOrdenados)): ?>
 
-        <div class="accordion accordion-flush" id="mainMenu">
+        <div id="mainMenu">
 
         <?php foreach ($gruposOrdenados as $cat => $items):
             $catId    = 'cat-' . preg_replace('/[^a-zA-Z0-9]/', '', $cat);
             $catLabel = Permission::nombreCategoria($cat);
             $catIcon  = Permission::iconoCategoria($cat);
 
-            // ¿Algún ítem de esta categoría está activo?
             $catActiva = false;
             foreach ($items as $p) {
                 $ruta = Permission::getRoute(isset($p['CLAVE']) ? $p['CLAVE'] : '');
@@ -482,33 +498,24 @@ $initials     = strtoupper(
             }
         ?>
 
-            <!-- ── Categoría: <?= htmlspecialchars($catLabel) ?> ── -->
-            <div class="accordion-item">
+            <div class="menu-cat">
+                <button type="button"
+                        class="menu-cat-btn"
+                        data-cat-toggle="<?= htmlspecialchars($catId) ?>"
+                        aria-expanded="<?= $catActiva ? 'true' : 'false' ?>"
+                        aria-controls="<?= htmlspecialchars($catId) ?>">
+                    <i class="<?= htmlspecialchars($catIcon) ?> me-2"
+                       style="width:15px; text-align:center; flex-shrink:0;"></i>
+                    <?= htmlspecialchars($catLabel) ?>
+                    <span class="badge bg-secondary bg-opacity-25 text-secondary ms-auto me-2"
+                          style="font-size:0.65rem; font-weight:500;">
+                        <?= count($items) ?>
+                    </span>
+                    <i class="fa-solid fa-chevron-down menu-cat-chevron"></i>
+                </button>
 
-                <div class="accordion-header" id="hdr-<?= $catId ?>">
-                    <button class="accordion-button <?= $catActiva ? '' : 'collapsed' ?>"
-                            type="button"
-                            data-bs-toggle="collapse"
-                            data-bs-target="#<?= $catId ?>"
-                            data-bs-parent="#mainMenu"
-                            aria-expanded="<?= $catActiva ? 'true' : 'false' ?>"
-                            aria-controls="<?= $catId ?>">
-                        <i class="<?= htmlspecialchars($catIcon) ?> me-2"
-                           style="width:15px; text-align:center; flex-shrink:0;"></i>
-                        <?= htmlspecialchars($catLabel) ?>
-                        <span class="badge bg-secondary bg-opacity-25 text-secondary ms-auto me-2"
-                              style="font-size:0.65rem; font-weight:500;">
-                            <?= count($items) ?>
-                        </span>
-                    </button>
-                </div>
-
-                <div id="<?= $catId ?>"
-                     class="accordion-collapse collapse <?= $catActiva ? 'show' : '' ?>"
-                     aria-labelledby="hdr-<?= $catId ?>"
-                     data-bs-parent="#mainMenu">
-
-                    <div class="accordion-body p-0">
+                <div id="<?= htmlspecialchars($catId) ?>"
+                     class="menu-cat-body<?= $catActiva ? ' is-open' : '' ?>">
                     <?php foreach ($items as $p):
                         $clave  = isset($p['CLAVE'])          ? $p['CLAVE']          : '';
                         $nombre = isset($p['NOMBRE_PERMISO']) ? $p['NOMBRE_PERMISO'] : $clave;
@@ -516,9 +523,12 @@ $initials     = strtoupper(
                         $icon   = Permission::iconoPorClave($clave, $cat);
                         $ruta   = Permission::getRoute($clave);
                         $active = ($ruta === $routeActual) ? ' active' : '';
+                        if ($nombre === '') {
+                            $nombre = $clave !== '' ? $clave : 'Módulo';
+                        }
                     ?>
                         <a href="index.php?route=<?= htmlspecialchars($ruta) ?>"
-                           class="menu-item menu-nav-link<?= $active ?>"
+                           class="menu-item<?= $active ?>"
                            style="padding:9px 12px 9px 36px;"
                            <?= $descr ? 'title="' . htmlspecialchars($descr) . '"' : '' ?>>
                             <span class="menu-icon">
@@ -527,10 +537,8 @@ $initials     = strtoupper(
                             <span class="menu-label"><?= htmlspecialchars($nombre) ?></span>
                         </a>
                     <?php endforeach; ?>
-                    </div>
-
                 </div>
-            </div><!-- /.accordion-item -->
+            </div>
 
         <?php endforeach; ?>
 
@@ -549,7 +557,7 @@ $initials     = strtoupper(
 
         <!-- ── Cerrar Sesión ─────────────────────────────────────────────── -->
         <a href="index.php?route=logout"
-           class="menu-item menu-nav-link menu-logout"
+           class="menu-item menu-logout"
            style="padding:10px 16px; margin-top:4px;">
             <span class="menu-icon">
                 <i class="fa-solid fa-right-from-bracket"></i>
@@ -561,39 +569,34 @@ $initials     = strtoupper(
 </div>
 <!-- ════════════════════════════════════════════════════════════════════════ -->
 
-<!--
-    NOTA TÉCNICA: Bootstrap 5 llama a event.preventDefault() para toda etiqueta
-    <a> con data-bs-dismiss, bloqueando la navegación del href.
-    Solución: los links del menú NO usan data-bs-dismiss; este script cierra el
-    offcanvas Y navega en paralelo (la recarga de página elimina el offcanvas
-    visualmente de inmediato).
--->
 <script>
 (function () {
-    var offcanvasEl = document.getElementById('offcanvasMenu');
-    if (!offcanvasEl) return;
+    var root = document.getElementById('mainMenu');
+    if (!root) return;
 
-    offcanvasEl.addEventListener('click', function (e) {
-        // Buscar el <a> más cercano con clase menu-nav-link
-        var link = e.target.closest('a.menu-nav-link');
-        if (!link) return;
+    root.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-cat-toggle]');
+        if (!btn || !root.contains(btn)) return;
 
-        var href = link.getAttribute('href');
-        if (!href || href === '#') return;
+        var id = btn.getAttribute('data-cat-toggle');
+        var panel = document.getElementById(id);
+        if (!panel) return;
 
-        e.preventDefault(); // evitar cualquier handler de Bootstrap
+        var opening = !panel.classList.contains('is-open');
 
-        // Obtener instancia del offcanvas y cerrarlo
-        var offcanvasInst = (typeof bootstrap !== 'undefined' && bootstrap.Offcanvas)
-            ? bootstrap.Offcanvas.getOrCreateInstance(offcanvasEl)
-            : null;
-
-        if (offcanvasInst) {
-            offcanvasInst.hide();
+        var openPanels = root.querySelectorAll('.menu-cat-body.is-open');
+        for (var i = 0; i < openPanels.length; i++) {
+            openPanels[i].classList.remove('is-open');
+        }
+        var openBtns = root.querySelectorAll('.menu-cat-btn[aria-expanded="true"]');
+        for (var j = 0; j < openBtns.length; j++) {
+            openBtns[j].setAttribute('aria-expanded', 'false');
         }
 
-        // Navegar de inmediato (la página se recarga, el offcanvas desaparece solo)
-        window.location.href = href;
+        if (opening) {
+            panel.classList.add('is-open');
+            btn.setAttribute('aria-expanded', 'true');
+        }
     });
 })();
 </script>
