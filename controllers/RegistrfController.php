@@ -325,19 +325,19 @@ class RegistrfController
                 'COSUCFAC'    => $cosucfac,
                 'CONROFAC'    => $conrofac,
                 'COFECFAC'    => $fecFac,
+                'COTOTALFAC'  => $total,
+                'COUSUARIO'   => $usr,
+                'COFECCARGA'  => date('Y-m-d H:i:s'),
+                // opcionales: insertar() las descarta si no existen (1054 COIMPORTE)
                 'COFECRECIB'  => $fecRecib,
                 'COTIPO'      => $g('COTIPO') ?: 'F',
                 'COCANTIDAD'  => $i('COCANTIDAD'),
-                'COIMPORTE'   => $n('COIMPORTE'),
                 'COIVA'       => $n('COIVA'),
                 'COCOSEGURO'  => $n('COCOSEGURO'),
-                'COTOTALFAC'  => $total,
                 'COMONTO'     => $n('COMONTO'),
                 'COCANTPREST' => $i('COCANTPREST'),
                 'COTIENEFAC'  => $g('COTIENEFAC') ?: 'S',
                 'COEMPRESA'   => $g('COEMPRESA'),
-                'COUSUARIO'   => $usr,
-                'COFECCARGA'  => date('Y-m-d H:i:s'),
             ]);
 
             echo json_encode(['ok' => true, 'msg' => 'Factura registrada correctamente.'], JSON_UNESCAPED_UNICODE);
@@ -355,15 +355,16 @@ class RegistrfController
     public function rptPrioritarios(): void
     {
         $this->requireAuth();
-        $this->requirePermiso('MNU_CD_FAC_INGRESO');
 
         $periodo = strtoupper(trim(str_replace('/', '', $_GET['periodo'] ?? '')));
         $tipo    = trim($_GET['tipo'] ?? 'prioritario');
+        $asJson  = ($_GET['format'] ?? '') === 'json';
         if (!in_array($tipo, ['prioritario', 'conflicto'], true)) {
             $tipo = 'prioritario';
         }
 
         if ($periodo === '') {
+            if ($asJson) { $this->jsonError('Debe colocar el Período...'); }
             $this->rptError('Debe colocar el Período...');
             return;
         }
@@ -374,8 +375,15 @@ class RegistrfController
             $filas = $model->reportePorFlag($periodo, $tipo);
             $this->utf8($filas);
         } catch (PDOException $e) {
+            if ($asJson) { $this->jsonError('Error al generar el reporte: ' . $e->getMessage()); }
             $this->rptError('Error al generar el reporte: ' . $e->getMessage());
             return;
+        }
+
+        if ($asJson) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => true, 'periodo' => $periodo, 'tipo' => $tipo, 'datos' => $filas], JSON_UNESCAPED_UNICODE);
+            exit;
         }
 
         $titulo = $tipo === 'conflicto'
@@ -388,10 +396,11 @@ class RegistrfController
     public function rptRecibos(): void
     {
         $this->requireAuth();
-        $this->requirePermiso('MNU_CD_FAC_INGRESO');
 
         $periodo = strtoupper(trim(str_replace('/', '', $_GET['periodo'] ?? '')));
+        $asJson  = ($_GET['format'] ?? '') === 'json';
         if ($periodo === '') {
+            if ($asJson) { $this->jsonError('Debe colocar el Período...'); }
             $this->rptError('Debe colocar el Período...');
             return;
         }
@@ -402,8 +411,15 @@ class RegistrfController
             $filas = $model->reportePorFlag($periodo, 'recibos');
             $this->utf8($filas);
         } catch (PDOException $e) {
+            if ($asJson) { $this->jsonError('Error al generar el reporte: ' . $e->getMessage()); }
             $this->rptError('Error al generar el reporte: ' . $e->getMessage());
             return;
+        }
+
+        if ($asJson) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => true, 'periodo' => $periodo, 'tipo' => 'recibos', 'datos' => $filas], JSON_UNESCAPED_UNICODE);
+            exit;
         }
 
         $this->renderReporte('Recibos Ingresados', $periodo, $filas, 'recibos');

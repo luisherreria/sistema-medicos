@@ -35,7 +35,7 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
         </div>
 
         <div class="modal-body px-4 py-3" style="background:#f0f4f8;">
-        <form id="form-ingresar-factura" autocomplete="off" novalidate>
+        <form id="form-ingresar-factura" autocomplete="off" novalidate onsubmit="return false;">
         <input type="hidden" name="csrf_token"   value="<?= htmlspecialchars($csrfToken) ?>">
         <input type="hidden" id="fac-cocateg"    name="COCATEG"    value="">
         <input type="hidden" id="fac-conomprest" name="CONOMPREST" value="">
@@ -307,6 +307,27 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
     </div>
 </div>
 
+<!-- Reporte en la misma pantalla (no depende de popups) -->
+<div class="modal fade" id="modalReporteRf" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2" style="background:#1e293b;color:#fff;">
+                <h6 class="modal-title mb-0" id="rf-rpt-titulo">Reporte</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div id="rf-rpt-body" style="min-height:200px;"></div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-sm btn-primary" id="rf-rpt-print">
+                    <i class="fa-solid fa-print me-1"></i>Imprimir
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <style>
 .rf-lbl { font-size:.74rem; font-weight:600; color:#374151; margin-bottom:2px; display:block; }
 .rf-inp { font-size:.82rem !important; }
@@ -355,6 +376,7 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
     letter-spacing: .4px;
     line-height: 1.25;
 }
+#modalReporteRf { z-index: 2000 !important; }
 </style>
 
 <script>
@@ -448,22 +470,47 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
     document.getElementById('fac-cosucfac').addEventListener('blur', function () { padFac(this, 4); });
     document.getElementById('fac-conrofac').addEventListener('blur', function () { padFac(this, 8); });
 
+    document.getElementById('form-ingresar-factura').addEventListener('submit', function (e) {
+        e.preventDefault();
+    });
+
+    function focusId(id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.focus();
+        if (el.select) el.select();
+    }
+
     document.getElementById('form-ingresar-factura').addEventListener('keydown', function (e) {
         if (e.key !== 'Enter') return;
+        e.preventDefault();
+        e.stopPropagation();
         var id = e.target.id;
 
-        if (id === 'fac-coprestado') {
-            e.preventDefault();
-            resolverPrestadorExacto(function () {
-                document.getElementById('fac-coobrasoc').focus();
-            });
+        if (id === 'fac-coprestado' || id === 'fac-prest-nombre-display') {
+            var wrap = document.getElementById('fac-prest-suggs-wrap');
+            var first = document.querySelector('#fac-prest-suggs a.list-group-item');
+            if (wrap && wrap.style.display !== 'none' && first) {
+                first.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                setTimeout(function () { focusId('fac-coobrasoc'); }, 30);
+                return;
+            }
+            if (document.getElementById('fac-prest-nombre-display').value.trim()
+                && document.getElementById('fac-coprestado').value.trim()) {
+                focusId('fac-coobrasoc');
+                return;
+            }
+            resolverPrestadorExacto(function () { focusId('fac-coobrasoc'); });
             return;
         }
         if (id === 'fac-coobrasoc') {
-            e.preventDefault();
-            resolverOSExacto(function () {
-                document.getElementById('fac-cosucfac').focus();
-            });
+            var osWrap = document.getElementById('fac-os-suggs');
+            var osFirst = osWrap ? osWrap.querySelector('a.list-group-item') : null;
+            if (osWrap && osWrap.style.display !== 'none' && osFirst) {
+                osFirst.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                return;
+            }
+            resolverOSExacto(function () { focusId('fac-cosucfac'); });
             return;
         }
         if (id === 'fac-coperiodo-display') syncPeriodo();
@@ -471,14 +518,8 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
         if (id === 'fac-conrofac') padFac(e.target, 8);
 
         var nextId = e.target.dataset.next;
-        if (!nextId) return;
-        e.preventDefault();
-        var $next = document.getElementById(nextId);
-        if ($next) {
-            $next.focus();
-            if ($next.select) $next.select();
-        }
-    });
+        if (nextId) focusId(nextId);
+    }, true);
 
     function setLeyendas(esPrio, esFactura, esVale) {
         document.getElementById('fac-leyenda-prio').style.display     = esPrio    ? 'block' : 'none';
@@ -502,11 +543,7 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
         if (fact) msgs.push('Prestador Con Factura, Verificar que la haya entregado, Gracias');
         if (vale) msgs.push('Prestador Factura vale como Recibo,Gracias');
         setLeyendas(prio, fact, vale);
-        if (msgs.length) {
-            setTimeout(function () {
-                msgs.forEach(function (msg) { window.alert(msg); });
-            }, 80);
-        }
+        msgs.forEach(function (msg) { window.alert(msg); });
     }
 
     var prestTimer;
@@ -791,26 +828,87 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
         });
     }
 
-    function abrirReporte(action, extra) {
+    function abrirReporte(action, extra, titulo) {
         var per = periodoActual();
         if (!per) {
             mostrarAlertFac('Debe colocar el Período...');
             document.getElementById('fac-coperiodo-display').focus();
             return;
         }
-        var url = 'index.php?route=' + ROUTE + '&action=' + action + '&periodo=' + encodeURIComponent(per);
+        var url = 'index.php?route=' + ROUTE + '&action=' + action
+            + '&periodo=' + encodeURIComponent(per)
+            + '&format=json';
         if (extra) url += extra;
-        window.open(url, 'rf_reporte', 'noopener,width=980,height=700');
+
+        var $body = document.getElementById('rf-rpt-body');
+        var $tit  = document.getElementById('rf-rpt-titulo');
+        $tit.textContent = titulo || 'Reporte';
+        $body.innerHTML = '<div class="text-center py-5 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>Generando…</div>';
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalReporteRf')).show();
+
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (!res.ok) {
+                    $body.innerHTML = '<div class="alert alert-danger m-3">' + esc(res.error || 'No se pudo generar el reporte.') + '</div>';
+                    return;
+                }
+                var perDisp = per.length === 4 ? per.substring(0, 2) + '/' + per.substring(2, 4) : per;
+                var rows = res.datos || [];
+                var html = '<div class="px-3 pt-3 pb-1 text-muted" style="font-size:.78rem;">Período <strong>'
+                    + esc(perDisp) + '</strong> · ' + rows.length + ' registro(s)</div>';
+                if (!rows.length) {
+                    html += '<div class="text-center text-muted py-5">No hay facturas para este período.</div>';
+                } else {
+                    html += '<div class="table-responsive"><table class="table table-sm table-striped mb-0" style="font-size:.8rem;">'
+                        + '<thead style="background:#1e293b;color:#fff;"><tr>'
+                        + '<th>Período</th><th>Fecha</th><th>Código</th><th>Prestador</th><th>Suc</th><th>N° Factura</th><th>F. Factura</th>'
+                        + '</tr></thead><tbody>';
+                    rows.forEach(function (r) {
+                        html += '<tr>'
+                            + '<td class="font-monospace">' + esc(perDisp) + '</td>'
+                            + '<td class="font-monospace">' + esc(fmtRptFecha(r.cofecha)) + '</td>'
+                            + '<td class="font-monospace">' + esc(r.coprestado || '') + '</td>'
+                            + '<td>' + esc(r.conomprest || r.nombre_ebamp || '') + '</td>'
+                            + '<td class="font-monospace">' + esc(r.cosucfac || '') + '</td>'
+                            + '<td class="font-monospace">' + esc(r.conrofac || '') + '</td>'
+                            + '<td class="font-monospace">' + esc(fmtRptFecha(r.cofecfac)) + '</td>'
+                            + '</tr>';
+                    });
+                    html += '</tbody></table></div>';
+                }
+                $body.innerHTML = html;
+            })
+            .catch(function () {
+                $body.innerHTML = '<div class="alert alert-danger m-3">Error de comunicación al generar el reporte.</div>';
+            });
+    }
+
+    function fmtRptFecha(s) {
+        if (!s || String(s).indexOf('0000-00-00') === 0) return '—';
+        var p = String(s).substring(0, 10).split('-');
+        return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : String(s);
     }
 
     document.getElementById('fac-btn-rpt-prio').addEventListener('click', function () {
-        abrirReporte('rpt_prioritarios', '&tipo=prioritario');
+        abrirReporte('rpt_prioritarios', '&tipo=prioritario', 'Rpt Prioritarios');
     });
     document.getElementById('fac-btn-rpt-conf').addEventListener('click', function () {
-        abrirReporte('rpt_prioritarios', '&tipo=conflicto');
+        abrirReporte('rpt_prioritarios', '&tipo=conflicto', 'Rpt Conflictivos');
     });
     document.getElementById('fac-btn-rpt-recibos').addEventListener('click', function () {
-        abrirReporte('rpt_recibos');
+        abrirReporte('rpt_recibos', '', 'Recibos Ingresados');
+    });
+    document.getElementById('rf-rpt-print').addEventListener('click', function () {
+        var html = document.getElementById('rf-rpt-body').innerHTML;
+        var w = window.open('', '_blank');
+        if (!w) { window.print(); return; }
+        w.document.write('<html><head><title>Reporte</title>'
+            + '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">'
+            + '</head><body class="p-3">' + html + '</body></html>');
+        w.document.close();
+        w.focus();
+        w.print();
     });
 
     function mostrarAlertFac(msg) {

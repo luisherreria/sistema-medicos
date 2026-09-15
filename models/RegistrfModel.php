@@ -33,6 +33,15 @@ class RegistrfModel
     // ══════════════════════════════════════════════════════════════════════
 
     /**
+     * Columnas confirmadas en el listado original (existen en registrf).
+     * El resto (COIMPORTE, COIVA, etc.) es opcional y se omite si no está.
+     */
+    private const COLS_CORE = [
+        'COPERIODO', 'COOBRASOC', 'COCATEG', 'COPRESTADO', 'CONOMPREST',
+        'COSUCFAC', 'CONROFAC', 'COFECFAC', 'COTOTALFAC', 'COUSUARIO', 'COFECCARGA',
+    ];
+
+    /**
      * @return array<string,string>  clave UPPER => nombre de columna tal cual en MySQL
      */
     public function columnas(): array
@@ -43,11 +52,32 @@ class RegistrfModel
         $this->columnasCache = [];
         try {
             foreach ($this->db->query('SHOW COLUMNS FROM registrf') as $row) {
-                $real = (string)$row['Field'];
-                $this->columnasCache[strtoupper($real)] = $real;
+                $real = (string)($row['Field'] ?? $row['field'] ?? $row['FIELD'] ?? '');
+                if ($real !== '') {
+                    $this->columnasCache[strtoupper($real)] = $real;
+                }
             }
         } catch (PDOException $e) {
-            error_log('RegistrfModel::columnas: ' . $e->getMessage());
+            error_log('RegistrfModel::columnas SHOW: ' . $e->getMessage());
+        }
+        if (!$this->columnasCache) {
+            try {
+                $stmt = $this->db->query(
+                    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+                     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'registrf'"
+                );
+                foreach ($stmt as $row) {
+                    $real = (string)($row['COLUMN_NAME'] ?? $row['column_name'] ?? $row['COLUMN_NAME'] ?? '');
+                    if ($real === '') {
+                        $real = (string)reset($row);
+                    }
+                    if ($real !== '') {
+                        $this->columnasCache[strtoupper($real)] = $real;
+                    }
+                }
+            } catch (PDOException $e) {
+                error_log('RegistrfModel::columnas INFO: ' . $e->getMessage());
+            }
         }
         return $this->columnasCache;
     }
@@ -128,33 +158,69 @@ class RegistrfModel
      */
     public function insertar(array $campos): void
     {
+        $descubiertas = $this->columnas();
+
         $existentes = [];
         foreach ($campos as $logico => $valor) {
-            if ($this->tieneColumna($logico)) {
-                $existentes[$this->col($logico)] = $valor;
+            $key = strtoupper($logico);
+            if ($descubiertas) {
+                if (!isset($descubiertas[$key])) {
+                    continue;
+                }
+                $existentes[$descubiertas[$key]] = $valor;
+            } elseif (in_array($key, self::COLS_CORE, true)) {
+                // Sin catálogo: sólo columnas del listado original (nunca COIMPORTE)
+                $existentes[$key] = $valor;
             }
         }
 
-        if ($this->tieneColumna('COFECCARGA') && !isset($existentes[$this->col('COFECCARGA')])) {
-            $existentes[$this->col('COFECCARGA')] = date('Y-m-d H:i:s');
+        if ($descubiertas && isset($descubiertas['COFECCARGA']) && !isset($existentes[$descubiertas['COFECCARGA']])) {
+            $existentes[$descubiertas['COFECCARGA']] = date('Y-m-d H:i:s');
         }
 
         if (!$existentes) {
             throw new PDOException('No hay columnas coincidentes para insertar en registrf.');
         }
 
-        $cols = array_keys($existentes);
-        $phs  = [];
-        $bind = [];
-        $i    = 0;
-        foreach ($existentes as $col => $val) {
-            $ph = ':p' . $i++;
-            $phs[] = $ph;
-            $bind[$ph] = $val;
-        }
+        $this->ejecutarInsert($existentes);
+    }
 
-        $sql = 'INSERT INTO registrf (' . implode(', ', $cols) . ') VALUES (' . implode(', ', $phs) . ')';
-        $this->db->prepare($sql)->execute($bind);
+    /** @param array<string,mixed> $existentes */
+    private function ejecutarInsert(array $existentes): void
+    {
+        for ($intento = 0; $intento < 20; $intento++) {
+            if (!$existentes) {
+                throw new PDOException('No quedan columnas válidas para insertar en registrf.');
+            }
+            $cols = array_keys($existentes);
+            $phs  = [];
+            $bind = [];
+            $i    = 0;
+            foreach ($existentes as $val) {
+                $ph = ':p' . $i++;
+                $phs[] = $ph;
+                $bind[$ph] = $val;
+            }
+            $sql = 'INSERT INTO registrf (' . implode(', ', $cols) . ') VALUES (' . implode(', ', $phs) . ')';
+            try {
+                $this->db->prepare($sql)->execute($bind);
+                return;
+            } catch (PDOException $e) {
+                if (!preg_match("/Unknown column '([^']+)'/i", $e->getMessage(), $m)) {
+                    throw $e;
+                }
+                $mala = strtoupper($m[1]);
+                foreach (array_keys($existentes) as $col) {
+                    if (strtoupper((string)$col) === $mala) {
+                        unset($existentes[$col]);
+                    }
+                }
+                if (isset($this->columnasCache[$mala])) {
+                    unset($this->columnasCache[$mala]);
+                }
+            }
+        }
+        throw new PDOException('No se pudo insertar la factura: columnas incompatibles.');
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -184,15 +250,18 @@ class RegistrfModel
         $fecFacExpr = $this->tieneColumna('COFECFAC') ? $this->col('COFECFAC') : 'NULL';
 
         $ebamp = $this->columnasEbamp();
-        $flagSql = '';
-        if ($tipo === 'conflicto' && isset($ebamp['conflicto'])) {
-            $flagSql = "AND TRIM(IFNULL(e.conflicto,'')) NOT IN ('', '0', 'N', 'F')";
-        } elseif ($tipo === 'prioritario' && isset($ebamp['recomenda'])) {
-            $flagSql = "AND TRIM(IFNULL(e.recomenda,'')) NOT IN ('', '0', 'N', 'F')";
-        } elseif ($tipo === 'prioritario' && isset($ebamp['conflicto'])) {
-            // fallback: si no hay recomenda, usar el mismo criterio de RPT_CONFLIF
-            $flagSql = "AND TRIM(IFNULL(e.conflicto,'')) NOT IN ('', '0', 'N', 'F')";
+        $flags = [];
+        if ($tipo !== 'recibos') {
+            if (isset($ebamp['recomenda']))  $flags[] = "TRIM(IFNULL(e.recomenda,'')) NOT IN ('', '0', 'N', 'F')";
+            if (isset($ebamp['conflicto']))  $flags[] = "TRIM(IFNULL(e.conflicto,''))  NOT IN ('', '0', 'N', 'F')";
+            if (isset($ebamp['confact']))    $flags[] = "TRIM(IFNULL(e.confact,''))    NOT IN ('', '0', 'N', 'F')";
+            if (isset($ebamp['valereci']))   $flags[] = "TRIM(IFNULL(e.valereci,''))   NOT IN ('', '0', 'N', 'F')";
         }
+        if ($tipo === 'conflicto' && isset($ebamp['conflicto'])) {
+            $flags = ["TRIM(IFNULL(e.conflicto,'')) NOT IN ('', '0', 'N', 'F')"];
+        }
+
+        $flagSql = $flags ? 'AND (' . implode(' OR ', $flags) . ')' : '';
 
         $sql = "SELECT
                     TRIM(r.{$this->col('COPERIODO')})  AS coperiodo,
@@ -204,16 +273,25 @@ class RegistrfModel
                     {$fecFacExpr}                      AS cofecfac,
                     TRIM(IFNULL(e.nombre,''))          AS nombre_ebamp
                 FROM registrf r
-                INNER JOIN ebamp e
+                LEFT JOIN ebamp e
                     ON TRIM(r.{$this->col('COPRESTADO')}) = TRIM(e.matricula)
                     OR TRIM(r.{$this->col('COPRESTADO')}) = TRIM(e.codigo)
-                WHERE TRIM(r.{$this->col('COPERIODO')}) = :periodo
+                WHERE REPLACE(REPLACE(TRIM(r.{$this->col('COPERIODO')}), '/', ''), '-', '') = :periodo
                   {$flagSql}
                 ORDER BY r.{$this->col('CONOMPREST')} ASC";
 
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':periodo' => $periodo]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Si el filtro de flags no trajo nada, mostrar todas las facturas del período
+        if (!$rows && $tipo !== 'recibos' && $flagSql !== '') {
+            $stmt = $this->db->prepare(str_replace($flagSql, '', $sql));
+            $stmt->execute([':periodo' => $periodo]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        }
+
+        return $rows;
     }
 
     /** @return array<string,true> */
@@ -226,7 +304,10 @@ class RegistrfModel
         $cols = [];
         try {
             foreach ($this->db->query('SHOW COLUMNS FROM ebamp') as $row) {
-                $cols[strtolower((string)$row['Field'])] = true;
+                $name = (string)($row['Field'] ?? $row['field'] ?? $row['FIELD'] ?? '');
+                if ($name !== '') {
+                    $cols[strtolower($name)] = true;
+                }
             }
         } catch (PDOException $e) {
             error_log('RegistrfModel::columnasEbamp: ' . $e->getMessage());
