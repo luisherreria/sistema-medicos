@@ -39,9 +39,13 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
         <input type="hidden" name="csrf_token"   value="<?= htmlspecialchars($csrfToken) ?>">
         <input type="hidden" id="fac-cocateg"    name="COCATEG"    value="">
         <input type="hidden" id="fac-conomprest" name="CONOMPREST" value="">
+        <input type="hidden" id="fac-conomobra"  name="CONOMOBRA"  value="">
+        <input type="hidden" id="fac-cotipopre"  name="COTIPOPRE"  value="">
+        <input type="hidden" id="fac-precio"     value="0">
         <input type="hidden" id="fac-recomenda"  value="">
         <input type="hidden" id="fac-confact"    value="">
         <input type="hidden" id="fac-valereci"   value="">
+        <input type="hidden" id="fac-conflicto"  value="">
 
         <!-- Fila 1: Fecha · Período · Prestador -->
         <div class="row g-2 mb-2 align-items-end">
@@ -169,13 +173,13 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
                 <label class="rf-lbl d-block">Factura :</label>
                 <div class="d-flex gap-3 align-items-center" style="padding-top:3px;">
                     <div class="form-check mb-0">
-                        <input class="form-check-input" type="radio" name="COTIPO"
-                               id="fac-tipo-fisica" value="F" checked data-next="fac-tipo-online">
+                        <input class="form-check-input" type="radio" name="TPFACT"
+                               id="fac-tipo-fisica" value="FISICA" checked data-next="fac-tipo-online">
                         <label class="form-check-label" for="fac-tipo-fisica" style="font-size:.8rem;">Física</label>
                     </div>
                     <div class="form-check mb-0">
-                        <input class="form-check-input" type="radio" name="COTIPO"
-                               id="fac-tipo-online" value="O" data-next="fac-cocantidad">
+                        <input class="form-check-input" type="radio" name="TPFACT"
+                               id="fac-tipo-online" value="ONLINE" data-next="fac-cocantidad">
                         <label class="form-check-label" for="fac-tipo-online" style="font-size:.8rem;">On-Line</label>
                     </div>
                 </div>
@@ -189,29 +193,29 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
                     <span class="rf-imp-lbl">Cantidad :</span>
                     <span class="rf-imp-pref"></span>
                     <input type="number" id="fac-cocantidad" name="COCANTIDAD"
-                           class="form-control form-control-sm rf-inp text-end rf-num"
+                           class="form-control form-control-sm rf-inp text-end rf-num fac-calc"
                            min="0" step="1" value="0" data-next="fac-coimporte">
                 </div>
                 <div class="rf-imp-row">
                     <span class="rf-imp-lbl">Importe :</span>
                     <span class="rf-imp-pref">$</span>
-                    <input type="number" id="fac-coimporte" name="IMPORTE"
+                    <input type="number" id="fac-coimporte" name="COIMPFAC"
                            class="form-control form-control-sm rf-inp text-end rf-num fac-calc"
                            min="0" step="0.01" value="" placeholder="0,00" data-next="fac-coiva">
                 </div>
                 <div class="rf-imp-row">
                     <span class="rf-imp-lbl">I.V.A. :</span>
                     <span class="rf-imp-pref">$</span>
-                    <input type="number" id="fac-coiva" name="COIVA"
+                    <input type="number" id="fac-coiva" name="COIVAFAC"
                            class="form-control form-control-sm rf-inp text-end rf-num fac-calc"
                            min="0" step="0.01" value="" placeholder="0,00" data-next="fac-cocoseguro">
                 </div>
                 <div class="rf-imp-row">
                     <span class="rf-imp-lbl">Coseguro :</span>
                     <span class="rf-imp-pref">$</span>
-                    <input type="number" id="fac-cocoseguro" name="COCOSEGURO"
+                    <input type="number" id="fac-cocoseguro" name="COCSGFAC"
                            class="form-control form-control-sm rf-inp text-end rf-num fac-calc"
-                           min="0" step="0.01" value="" placeholder="0,00" data-next="fac-comonto">
+                           min="0" step="0.01" value="" placeholder="0,00" data-next="fac-copesos">
                 </div>
                 <div class="rf-imp-row">
                     <span class="rf-imp-lbl fw-bold" style="color:#1d4ed8;">Total :</span>
@@ -227,14 +231,14 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
                 <div class="rf-imp-row">
                     <span class="rf-imp-lbl">$ :</span>
                     <span class="rf-imp-pref"></span>
-                    <input type="number" id="fac-comonto" name="COMONTO"
-                           class="form-control form-control-sm rf-inp text-end rf-num"
-                           min="0" step="0.01" value="" placeholder="0,00" data-next="fac-cocantprest">
+                    <input type="number" id="fac-copesos" name="COPESOS"
+                           class="form-control form-control-sm rf-inp text-end rf-num fac-calc"
+                           min="0" step="0.01" value="" placeholder="0,00" data-next="fac-cocantcalc">
                 </div>
                 <div class="rf-imp-row">
                     <span class="rf-imp-lbl">Cant. Prest. :</span>
                     <span class="rf-imp-pref"></span>
-                    <input type="number" id="fac-cocantprest" name="COCANTPREST"
+                    <input type="number" id="fac-cocantcalc" name="COCANTCALC"
                            class="form-control form-control-sm rf-inp text-end rf-num"
                            min="0" step="1" value="0" data-next="fac-tienefac-si">
                 </div>
@@ -243,14 +247,14 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
                     <span class="rf-imp-pref"></span>
                     <div class="d-flex gap-3 align-items-center" style="height:31px;">
                         <div class="form-check mb-0">
-                            <input class="form-check-input" type="radio" name="COTIENEFAC"
-                                   id="fac-tienefac-si" value="S" checked data-next="fac-btn-guardar">
+                            <input class="form-check-input" type="radio" name="COFACTURA"
+                                   id="fac-tienefac-si" value="SI" checked data-next="fac-btn-guardar">
                             <label class="form-check-label fw-bold" for="fac-tienefac-si"
                                    style="font-size:.82rem; color:#16a34a;">SI</label>
                         </div>
                         <div class="form-check mb-0">
-                            <input class="form-check-input" type="radio" name="COTIENEFAC"
-                                   id="fac-tienefac-no" value="N" data-next="fac-btn-guardar">
+                            <input class="form-check-input" type="radio" name="COFACTURA"
+                                   id="fac-tienefac-no" value="NO" data-next="fac-btn-guardar">
                             <label class="form-check-label fw-bold" for="fac-tienefac-no"
                                    style="font-size:.82rem; color:#dc2626;">NO</label>
                         </div>
@@ -412,10 +416,10 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
     function resetFac() {
         osDelPrestador = [];
         document.getElementById('fac-cototalfac').value = '';
-        ['fac-coimporte','fac-coiva','fac-cocoseguro','fac-comonto'].forEach(function (id) {
+        ['fac-coimporte','fac-coiva','fac-cocoseguro','fac-copesos'].forEach(function (id) {
             document.getElementById(id).value = '';
         });
-        ['fac-cocantidad','fac-cocantprest'].forEach(function (id) {
+        ['fac-cocantidad','fac-cocantcalc'].forEach(function (id) {
             document.getElementById(id).value = '0';
         });
         document.getElementById('fac-coprestado').value           = '';
@@ -424,9 +428,13 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
         document.getElementById('fac-os-nombre-display').value    = '';
         document.getElementById('fac-cocateg').value              = '';
         document.getElementById('fac-conomprest').value           = '';
+        document.getElementById('fac-conomobra').value            = '';
+        document.getElementById('fac-cotipopre').value            = '';
+        document.getElementById('fac-precio').value               = '0';
         document.getElementById('fac-recomenda').value            = '';
         document.getElementById('fac-confact').value              = '';
         document.getElementById('fac-valereci').value             = '';
+        document.getElementById('fac-conflicto').value            = '';
         document.getElementById('fac-empresa-display').value      = '';
         document.getElementById('fac-empresa').value              = '';
         document.getElementById('fac-cosucfac').value             = '';
@@ -472,14 +480,37 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
         return syncPeriodo();
     }
 
-    function calcTotal() {
-        var imp  = parseFloat(document.getElementById('fac-coimporte').value)  || 0;
-        var iva  = parseFloat(document.getElementById('fac-coiva').value)      || 0;
-        var cos  = parseFloat(document.getElementById('fac-cocoseguro').value) || 0;
-        document.getElementById('fac-cototalfac').value = (imp + iva + cos).toFixed(2);
+    function numVal(id) {
+        return parseFloat(document.getElementById(id).value) || 0;
+    }
+
+    function calcImportes(origen) {
+        var cant    = numVal('fac-cocantidad');
+        var importe = numVal('fac-coimporte');
+        var iva     = numVal('fac-coiva');
+        var csg     = numVal('fac-cocoseguro');
+        var precio  = numVal('fac-precio');
+        var pesos   = numVal('fac-copesos');
+
+        if (origen !== 'pesos') {
+            pesos = cant * precio;
+        }
+        if (importe > 0) pesos = 0;
+        if (cant > 1 && pesos > 1) {
+            importe = 0;
+            document.getElementById('fac-coimporte').value = '';
+        }
+        var total = importe + iva + csg;
+        document.getElementById('fac-copesos').value    = pesos ? pesos.toFixed(2) : '';
+        document.getElementById('fac-cototalfac').value = total ? total.toFixed(2) : '';
+        if (precio > 0 && total > 0) {
+            document.getElementById('fac-cocantcalc').value = (total / precio).toFixed(2);
+        }
     }
     document.querySelectorAll('.fac-calc').forEach(function (el) {
-        el.addEventListener('input', calcTotal);
+        el.addEventListener('input', function () {
+            calcImportes(el.id === 'fac-copesos' ? 'pesos' : '');
+        });
     });
 
     function padFac(el, len) {
@@ -524,15 +555,15 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
         e.stopPropagation();
         if (e.stopImmediatePropagation) e.stopImmediatePropagation();
         clearTimeout(prestTimer);
-        var id = e.target.id;
-        if (id === 'fac-prest-nombre-display') {
-            var first = document.querySelector('#fac-prest-suggs a.list-group-item');
-            if (first) {
-                first.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-                return;
-            }
+        ocultarAlertFac();
+
+        var first = document.querySelector('#fac-prest-suggs a.list-group-item');
+        var wrap = document.getElementById('fac-prest-suggs-wrap');
+        if (wrap && wrap.style.display !== 'none' && first) {
+            first.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+            return;
         }
-        ocultarSuggsPrest();
+
         var cod = document.getElementById('fac-coprestado').value.trim();
         var nom = document.getElementById('fac-prest-nombre-display').value.trim();
         if (!cod) return;
@@ -542,13 +573,15 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
             return;
         }
         resolverPrestadorExacto(function (ok) {
-            if (!ok && !document.getElementById('fac-prest-nombre-display').value.trim()) {
-                mostrarAlertFac('Prestador no encontrado. Verificá el código.');
-                focusId('fac-coprestado');
+            var nom2 = document.getElementById('fac-prest-nombre-display').value.trim();
+            if (ok || nom2) {
+                ocultarAlertFac();
+                avanzarDesdePrestador();
+                flushAlertasPrestador();
                 return;
             }
-            avanzarDesdePrestador();
-            flushAlertasPrestador();
+            mostrarAlertFac('Prestador no encontrado. Verificá el código.');
+            focusId('fac-coprestado');
         });
     }
 
@@ -594,7 +627,7 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
     }
 
     function alertaSeleccionPrestador(r) {
-        var prio  = flagOn(r.recomenda, r.isprioritario);
+        var prio  = flagOn(r.conflicto, r.isprioritario);
         var fact  = flagOn(r.confact,   r.isconfact);
         var vale  = flagOn(r.valereci,  r.isvalereci);
         var msgs  = [];
@@ -649,7 +682,7 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
                 var baja = r.fechabaja && r.fechabaja !== '0000-00-00' && r.fechabaja !== '0000-00-00 00:00:00'
                     ? ' <span style="font-size:.65rem; color:#b91c1c; font-weight:600;">[BAJA]</span>' : '';
                 a.innerHTML = '<span class="fw-bold text-primary font-monospace" style="font-size:.78rem;">'
-                    + esc(r.codigo) + '</span>'
+                    + esc(r.matricula || r.codigo) + '</span>'
                     + ' — ' + esc(r.nombre) + baja
                     + (r.categ ? ' <span class="badge bg-secondary bg-opacity-40 ms-1" style="font-size:.62rem;">' + esc(r.categ) + '</span>' : '');
                 a.addEventListener('mousedown', function (e) {
@@ -663,18 +696,23 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
     }
 
     function seleccionarPrestador(r, avanzar) {
-        document.getElementById('fac-coprestado').value           = r.codigo || r.matricula || '';
+        ocultarAlertFac();
+        document.getElementById('fac-coprestado').value           = r.matricula || r.codigo || '';
         document.getElementById('fac-prest-nombre-display').value = r.nombre || '';
         document.getElementById('fac-conomprest').value           = r.nombre || '';
         document.getElementById('fac-cocateg').value              = r.categ     || '';
+        document.getElementById('fac-cotipopre').value            = r.tipo      || '';
+        document.getElementById('fac-precio').value               = r.precio    || 0;
         document.getElementById('fac-recomenda').value            = r.recomenda || '';
         document.getElementById('fac-confact').value              = r.confact   || '';
         document.getElementById('fac-valereci').value             = r.valereci  || '';
+        document.getElementById('fac-conflicto').value            = r.conflicto || '';
         document.getElementById('fac-empresa-display').value      = r.empresa   || '';
         document.getElementById('fac-empresa').value              = r.empresa   || '';
         ocultarSuggsPrest();
         alertaSeleccionPrestador(r);
-        completarObrasSociales(r.codigo || r.matricula || '');
+        completarObrasSociales(r.matricula || r.codigo || '');
+        calcImportes();
         if (avanzar) {
             avanzarDesdePrestador();
             flushAlertasPrestador();
@@ -693,6 +731,7 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
             if (osDelPrestador.length === 1) {
                 document.getElementById('fac-coobrasoc').value         = osDelPrestador[0].cosoc;
                 document.getElementById('fac-os-nombre-display').value = osDelPrestador[0].nombre;
+                document.getElementById('fac-conomobra').value         = osDelPrestador[0].nombre;
             } else if (osDelPrestador.length > 1 && !document.getElementById('fac-coobrasoc').value.trim()) {
                 renderSuggsOS(osDelPrestador);
             }
@@ -708,7 +747,7 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
               { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
         .then(function (r) { return r.json(); })
         .then(function (res) {
-            if (res.ok && res.datos && res.datos.length === 1) {
+            if (res.ok && res.datos && res.datos.length >= 1) {
                 seleccionarPrestador(res.datos[0], false);
                 if (done) done(true);
                 return;
@@ -784,6 +823,7 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
                 e.preventDefault();
                 document.getElementById('fac-coobrasoc').value         = r.cosoc;
                 document.getElementById('fac-os-nombre-display').value = r.nombre;
+                document.getElementById('fac-conomobra').value         = r.nombre;
                 ocultarSuggsOS();
                 document.getElementById('fac-cosucfac').focus();
             });
@@ -805,6 +845,7 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
         if (local.length === 1) {
             document.getElementById('fac-coobrasoc').value         = local[0].cosoc;
             document.getElementById('fac-os-nombre-display').value = local[0].nombre;
+            document.getElementById('fac-conomobra').value         = local[0].nombre;
             ocultarSuggsOS();
             if (done) done();
             return;
@@ -816,6 +857,7 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
             if (res.ok && res.datos && res.datos.length === 1) {
                 document.getElementById('fac-coobrasoc').value         = res.datos[0].cosoc;
                 document.getElementById('fac-os-nombre-display').value = res.datos[0].nombre;
+                document.getElementById('fac-conomobra').value         = res.datos[0].nombre;
                 ocultarSuggsOS();
             }
             if (done) done();
@@ -856,17 +898,41 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
         syncPeriodo();
         padFac(document.getElementById('fac-cosucfac'), 4);
         padFac(document.getElementById('fac-conrofac'), 8);
-        calcTotal();
+        calcImportes();
+
+        var per = document.getElementById('fac-coperiodo').value.trim();
+        var aa  = parseInt(per.substring(0, 2), 10);
+        var mm  = parseInt(per.substring(2, 4), 10);
+        var cant    = numVal('fac-cocantidad');
+        var importe = numVal('fac-coimporte');
+        var pesos   = numVal('fac-copesos');
+        var total   = numVal('fac-cototalfac');
 
         var errores = [];
-        if (!document.getElementById('fac-coperiodo').value.trim())
-            errores.push('Debe colocar el Período...');
+        if (!per) errores.push('Debe colocar el Período...');
+        else if (per.length < 4) errores.push('Verifique el periodo AA/MM');
+        else {
+            if ((2000 + aa) < (new Date().getFullYear() - 1)) errores.push('Verifique el año del periodo AA');
+            if (mm < 1 || mm > 12) errores.push('Verifique el mes del periodo MM');
+        }
         if (!document.getElementById('fac-coprestado').value.trim())
             errores.push('Ingresá el código del Prestador.');
+        if (!document.getElementById('fac-prest-nombre-display').value.trim())
+            errores.push('Prestador no encontrado. Verificá el código.');
         if (!document.getElementById('fac-coobrasoc').value.trim())
             errores.push('Ingresá el código de Obra Social.');
         if (!document.getElementById('fac-cosucfac').value.trim() || !document.getElementById('fac-conrofac').value.trim())
             errores.push('Completá el N° de Factura (punto de venta y número).');
+        if (!document.querySelector('input[name="TPFACT"]:checked'))
+            errores.push('Debe Completar el Tipo Factura Online o Fisica');
+        if (!document.querySelector('input[name="COFACTURA"]:checked'))
+            errores.push('Debe Completar el Campo Factura');
+        if (cant < 1 && importe < 1)
+            errores.push('No puede continuar si la cantidad es mayor a 1 y Pesos en menor a 1, verifique ');
+        if (cant > 1 && pesos < 1 && importe < 1)
+            errores.push('No puede continuar si la cantidad es mayor a 0 y Pesos/importe es menor a 1, verifique ');
+        if (total < 1 && pesos < 1)
+            errores.push(' No puede continuar con el total/Pesos de la factura en 0 ');
         if (errores.length) { mostrarAlertFac(errores.join(' ')); return; }
 
         var btn = document.getElementById('fac-btn-guardar');

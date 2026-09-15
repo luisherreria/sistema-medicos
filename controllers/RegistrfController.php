@@ -91,23 +91,14 @@ class RegistrfController
 
         try {
             if ($exact) {
-                $qNorm = strtoupper(str_replace(['-', ' ', '/'], '', $q));
-                $stmt = $this->db()->prepare(
-                    "SELECT {$cols}
-                     FROM ebamp
-                     WHERE TRIM(codigo) = :cod OR TRIM(matricula) = :mat
-                        OR REPLACE(REPLACE(REPLACE(TRIM(codigo), '-', ''), ' ', ''), '/', '') = :norm1
-                        OR REPLACE(REPLACE(REPLACE(TRIM(matricula), '-', ''), ' ', ''), '/', '') = :norm2
-                     ORDER BY CASE WHEN TRIM(codigo) = :cod2 THEN 0 ELSE 1 END
-                     LIMIT 1"
-                );
-                $stmt->execute([
-                    ':cod'   => $q,
-                    ':mat'   => $q,
-                    ':cod2'  => $q,
-                    ':norm1' => $qNorm,
-                    ':norm2' => $qNorm,
-                ]);
+                $rows = $this->seekPrestador($cols, $q);
+                $this->utf8($rows);
+                foreach ($rows as &$r) {
+                    $this->enriquecerPrestador($r);
+                }
+                unset($r);
+                echo json_encode(['ok' => true, 'datos' => $rows], JSON_UNESCAPED_UNICODE);
+                exit;
             } else {
                 $conds = ['(nombre LIKE :b1 OR codigo LIKE :b2 OR matricula LIKE :b3)'];
                 $params = [
@@ -135,10 +126,7 @@ class RegistrfController
             $this->utf8($rows);
 
             foreach ($rows as &$r) {
-                $r['isprioritario'] = self::flagActivo($r['recomenda'] ?? '');
-                $r['isconfact']     = self::flagActivo($r['confact'] ?? '');
-                $r['isvalereci']    = self::flagActivo($r['valereci'] ?? '');
-                $r['isconflicto']   = self::flagActivo($r['conflicto'] ?? '');
+                $this->enriquecerPrestador($r);
             }
             unset($r);
 
@@ -285,10 +273,55 @@ class RegistrfController
         $periodo    = strtoupper(str_replace('/', '', $g('COPERIODO')));
 
         if ($periodo === '')         { $this->jsonError('Debe colocar el Período...'); }
+        if (strlen($periodo) < 4)    { $this->jsonError('Verifique el periodo AA/MM'); }
+        $anio = (int)('20' . substr($periodo, 0, 2));
+        $mes  = (int)substr($periodo, 2, 2);
+        if ($anio < ((int)date('Y') - 1)) { $this->jsonError('Verifique el año del periodo AA'); }
+        if ($mes < 1 || $mes > 12)        { $this->jsonError('Verifique el mes del periodo MM'); }
         if (!$coprestado)            { $this->jsonError('El código de Prestador es requerido.'); }
         if (!$coobrasoc)             { $this->jsonError('El código de Obra Social es requerido.'); }
         if ($cosucfac === '0000')    { $this->jsonError('Ingresá el punto de venta de la factura.'); }
         if ($conrofac === '00000000'){ $this->jsonError('Ingresá el número de factura.'); }
+
+        $importe = $n('COIMPFAC') ?: ($n('IMPORTE') ?: $n('COIMPORTE'));
+        $iva     = $n('COIVAFAC') ?: $n('COIVA');
+        $csg     = $n('COCSGFAC') ?: $n('COCOSEGURO');
+        $pesos   = $n('COPESOS')  ?: $n('COMONTO');
+        $cant    = $n('COCANTIDAD');
+        $total   = $n('COTOTALFAC');
+        if ($total <= 0) {
+            $total = $importe + $iva + $csg;
+        }
+        // Valids VFP del aceptar
+        if ($importe > 0) {
+            $pesos = 0;
+        }
+        if ($cant > 1 && $pesos > 1) {
+            $importe = 0;
+        }
+        if ($cant < 1 && $importe < 1) {
+            $this->jsonError('No puede continuar si la cantidad es mayor a 1 y Pesos en menor a 1, verifique ');
+        }
+        if ($cant > 1 && $pesos < 1 && $importe < 1) {
+            $this->jsonError('No puede continuar si la cantidad es mayor a 0 y Pesos/importe es menor a 1, verifique ');
+        }
+        if ($total < 1 && $pesos < 1) {
+            $this->jsonError(' No puede continuar con el total/Pesos de la factura en 0 ');
+        }
+
+        $tfactura = strtoupper($g('COFACTURA') ?: ($g('COTIENEFAC') ?: 'SI'));
+        if (in_array($tfactura, ['S', '1'], true)) $tfactura = 'SI';
+        if (in_array($tfactura, ['N', '0'], true)) $tfactura = 'NO';
+        if (!in_array($tfactura, ['SI', 'NO'], true)) {
+            $this->jsonError('Debe Completar el Campo Factura');
+        }
+
+        $tpfact = strtoupper($g('TPFACT') ?: $g('COTIPO'));
+        if ($tpfact === 'F') $tpfact = 'FISICA';
+        if ($tpfact === 'O') $tpfact = 'ONLINE';
+        if (!in_array($tpfact, ['FISICA', 'ONLINE'], true)) {
+            $this->jsonError('Debe Completar el Tipo Factura Online o Fisica');
+        }
 
         $usr = strtoupper(substr($_SESSION['user']['username'] ?? 'SIS', 0, 10));
 
@@ -315,16 +348,12 @@ class RegistrfController
             $fecha     = $g('COFECHA')    ?: date('Y-m-d');
             $fecFac    = $g('COFECFAC')   ?: $fecha;
             $fecRecib  = $g('COFECRECIB') ?: $fecha;
-            $total     = $n('COTOTALFAC');
-            if ($total <= 0) {
-                $importe = $n('IMPORTE') ?: $n('COIMPORTE');
-                $total   = $importe + $n('COIVA') + $n('COCOSEGURO');
-            }
 
             require_once __DIR__ . '/../models/RegistrfModel.php';
             $model = new RegistrfModel();
 
-            // Nunca incluir COIMPORTE: esa columna no existe en registrf (1054).
+            // Nombres VFP reales. insertar() omite los que no existan.
+            // COIMPORTE no existe: el importe es COIMPFAC.
             $model->insertar([
                 'COFECHA'     => $fecha,
                 'COPERIODO'   => $periodo,
@@ -332,21 +361,25 @@ class RegistrfController
                 'COCATEG'     => $cocateg,
                 'COPRESTADO'  => $coprestado,
                 'CONOMPREST'  => $conomprest,
+                'CONOMOBRA'   => $g('CONOMOBRA'),
                 'COSUCFAC'    => $cosucfac,
                 'CONROFAC'    => $conrofac,
                 'COFECFAC'    => $fecFac,
+                'COCANTIDAD'  => $cant,
+                'COIMPFAC'    => $importe,
+                'COIVAFAC'    => $iva,
+                'COCSGFAC'    => $csg,
                 'COTOTALFAC'  => $total,
+                'COPESOS'     => $pesos,
+                'COCANTCALC'  => $n('COCANTCALC') ?: $i('COCANTPREST'),
+                'COEMPRESA'   => $g('COEMPRESA'),
+                'COFACTURA'   => $tfactura,
+                'TPFACT'      => $tpfact,
+                'COTIPOPRE'   => $g('COTIPOPRE'),
                 'COUSUARIO'   => $usr,
                 'COFECCARGA'  => date('Y-m-d H:i:s'),
                 'COFECRECIB'  => $fecRecib,
-                'COTIPO'      => $g('COTIPO') ?: 'F',
-                'COCANTIDAD'  => $i('COCANTIDAD'),
-                'COIVA'       => $n('COIVA'),
-                'COCOSEGURO'  => $n('COCOSEGURO'),
-                'COMONTO'     => $n('COMONTO'),
-                'COCANTPREST' => $i('COCANTPREST'),
-                'COTIENEFAC'  => $g('COTIENEFAC') ?: 'S',
-                'COEMPRESA'   => $g('COEMPRESA'),
+                'CODISKETTE'  => $g('CODISKETTE') ?: 'N',
             ]);
 
             echo json_encode(['ok' => true, 'msg' => 'Factura registrada correctamente.'], JSON_UNESCAPED_UNICODE);
@@ -458,10 +491,12 @@ class RegistrfController
             'nombre'    => 'TRIM(nombre) AS nombre',
             'categ'     => 'TRIM(categ) AS categ',
             'empresa'   => 'TRIM(empresa) AS empresa',
+            'tipo'      => 'TRIM(tipo) AS tipo',
             'recomenda' => 'TRIM(recomenda) AS recomenda',
             'confact'   => 'TRIM(confact) AS confact',
             'valereci'  => 'TRIM(valereci) AS valereci',
             'conflicto' => 'TRIM(conflicto) AS conflicto',
+            'cuit'      => 'TRIM(cuit) AS cuit',
             'fechabaja' => 'fechabaja',
         ];
         $have = [];
@@ -486,16 +521,109 @@ class RegistrfController
         return $sql;
     }
 
+    /**
+     * VFP: SET ORDER TO TAG Matricula + SEEK (tpresta).
+     * Si EOF, LOCATE por matrícula (categ <> MECM).
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    private function seekPrestador(string $cols, string $q): array
+    {
+        $q    = trim($q);
+        $qNz  = ltrim($q, '0');
+        if ($qNz === '') {
+            $qNz = '0';
+        }
+        $mat = "TRIM(CAST(matricula AS CHAR))";
+        $cod = "TRIM(CAST(codigo AS CHAR))";
+        $sql = "SELECT {$cols}
+                FROM ebamp
+                WHERE {$mat} = :q1 OR {$cod} = :q2
+                   OR TRIM(LEADING '0' FROM {$mat}) = :qnz1
+                   OR TRIM(LEADING '0' FROM {$cod}) = :qnz2";
+        $bind = [
+            ':q1'   => $q,
+            ':q2'   => $q,
+            ':qnz1' => $qNz,
+            ':qnz2' => $qNz,
+        ];
+        if (ctype_digit($q)) {
+            $sql .= " OR CAST(matricula AS UNSIGNED) = :qi1 OR CAST(codigo AS UNSIGNED) = :qi2";
+            $bind[':qi1'] = (int)$q;
+            $bind[':qi2'] = (int)$q;
+        }
+        $sql .= " ORDER BY CASE WHEN {$mat} = :ord THEN 0 ELSE 1 END LIMIT 1";
+        $bind[':ord'] = $q;
+
+        $stmt = $this->db()->prepare($sql);
+        $stmt->execute($bind);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if ($rows) {
+            return $rows;
+        }
+
+        $like = '%' . $q . '%';
+        $stmt = $this->db()->prepare(
+            "SELECT {$cols}
+             FROM ebamp
+             WHERE ({$mat} LIKE :l1 OR {$cod} LIKE :l2)
+               AND TRIM(IFNULL(categ,'')) <> 'MECM'
+             ORDER BY CASE WHEN {$mat} = :e1 THEN 0 WHEN {$cod} = :e2 THEN 1 ELSE 2 END
+             LIMIT 1"
+        );
+        $stmt->execute([':l1' => $like, ':l2' => $like, ':e1' => $q, ':e2' => $q]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /** @param array<string,mixed> $r */
+    private function enriquecerPrestador(array &$r): void
+    {
+        // VFP: thisform.isprioritario.value = ebamp.Conflicto
+        $r['isprioritario'] = self::flagActivo((string)($r['conflicto'] ?? ''));
+        $r['isconfact']     = self::flagActivo((string)($r['confact'] ?? ''));
+        $r['isvalereci']    = self::flagActivo((string)($r['valereci'] ?? ''));
+        $r['isconflicto']   = $r['isprioritario'];
+        $pres = trim((string)($r['matricula'] ?? $r['codigo'] ?? ''));
+        $r['precio'] = $pres !== '' ? $this->precioPracespe($pres) : 0.0;
+    }
+
+    /** VFP: SEEK pecodigo+'42', si no FOUND SEEK pecodigo+'25' → peimporte */
+    private function precioPracespe(string $pres): float
+    {
+        try {
+            foreach (['42', '25'] as $pref) {
+                $stmt = $this->db()->prepare(
+                    "SELECT peimporte FROM pracespe
+                     WHERE TRIM(pecodigo) = :p AND LEFT(TRIM(pepractica), 2) = :c
+                     LIMIT 1"
+                );
+                $stmt->execute([':p' => $pres, ':c' => $pref]);
+                $v = $stmt->fetchColumn();
+                if ($v !== false && (float)$v > 0) {
+                    return (float)$v;
+                }
+            }
+        } catch (PDOException $e) {
+            error_log('precioPracespe: ' . $e->getMessage());
+        }
+        return 0.0;
+    }
+
     /** codigo + matricula de ebamp para cruzar con obramed.MEDICO */
     private function idsPrestador(PDO $db, string $codigo): array
     {
-        $stmt = $db->prepare(
-            "SELECT TRIM(codigo) AS codigo, TRIM(matricula) AS matricula
-             FROM ebamp
-             WHERE TRIM(codigo) = :c OR TRIM(matricula) = :m
-             LIMIT 1"
-        );
-        $stmt->execute([':c' => $codigo, ':m' => $codigo]);
+        $sql = "SELECT TRIM(CAST(codigo AS CHAR)) AS codigo, TRIM(CAST(matricula AS CHAR)) AS matricula
+                FROM ebamp
+                WHERE TRIM(CAST(codigo AS CHAR)) = :c OR TRIM(CAST(matricula AS CHAR)) = :m";
+        $bind = [':c' => $codigo, ':m' => $codigo];
+        if (ctype_digit($codigo)) {
+            $sql .= " OR CAST(codigo AS UNSIGNED) = :ci OR CAST(matricula AS UNSIGNED) = :mi";
+            $bind[':ci'] = (int)$codigo;
+            $bind[':mi'] = (int)$codigo;
+        }
+        $sql .= " LIMIT 1";
+        $stmt = $db->prepare($sql);
+        $stmt->execute($bind);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$row) {
             return [$codigo];

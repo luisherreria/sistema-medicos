@@ -269,13 +269,10 @@ class RegistrfModel
 
         $ebamp = $this->columnasEbamp();
         $flags = [];
-        if ($tipo === 'conflicto' && isset($ebamp['conflicto'])) {
-            $flags[] = "TRIM(IFNULL(e.conflicto,'')) NOT IN ('', '0', 'N', 'F')";
-        } elseif ($tipo === 'prioritario') {
-            if (isset($ebamp['recomenda']))  $flags[] = "TRIM(IFNULL(e.recomenda,'')) NOT IN ('', '0', 'N', 'F')";
-            if (isset($ebamp['conflicto']))  $flags[] = "TRIM(IFNULL(e.conflicto,''))  NOT IN ('', '0', 'N', 'F')";
-            if (isset($ebamp['confact']))    $flags[] = "TRIM(IFNULL(e.confact,''))    NOT IN ('', '0', 'N', 'F')";
-            if (isset($ebamp['valereci']))   $flags[] = "TRIM(IFNULL(e.valereci,''))   NOT IN ('', '0', 'N', 'F')";
+        if ($tipo === 'conflicto' || $tipo === 'prioritario') {
+            if (isset($ebamp['conflicto'])) {
+                $flags[] = "TRIM(IFNULL(e.conflicto,'')) NOT IN ('', '0', 'N', 'F', '.F.')";
+            }
         }
 
         $flagSql = $flags ? 'AND (' . implode(' OR ', $flags) . ')' : '';
