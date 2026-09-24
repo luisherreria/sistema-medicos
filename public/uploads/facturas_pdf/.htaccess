@@ -1,0 +1,5 @@
+# Evita ejecución de scripts en la carpeta de PDFs subidos
+<FilesMatch "\.(php|phtml|php5|phar|cgi|pl|py|exe)$">
+    Deny from all
+</FilesMatch>
+Options -Indexes

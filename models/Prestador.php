@@ -96,7 +96,8 @@ class Prestador
                         TRIM(tienesucpr) AS tienesucpr,
                         TRIM(trabajaos)  AS trabajaos,
                         TRIM(tieneprest) AS tieneprest,
-                        TRIM(issuspend)  AS issuspend
+                        TRIM(issuspend)  AS issuspend,
+                        TRIM(sab)        AS sab
                     FROM ebamp
                     {$where}
                     ORDER BY nombre ASC
@@ -221,27 +222,29 @@ class Prestador
      */
     public static function claseFilaTabla(array $row): string
     {
-        // ── Dado de baja: fechabaja pasada ────────────────────────────────
+        // Normaliza flags VFP ('T'/'F') y MySQL ('1'/'0'/NULL) → bool
+        $flag = static function ($v): bool {
+            $v = strtoupper(trim((string)($v ?? '')));
+            return ($v === 'T' || $v === '1');
+        };
+
+        // 1. Dado de baja (violeta): fechabaja < hoy
         $fb = trim($row['fechabaja'] ?? '');
-        $esInactivo = ($fb !== '' && $fb !== '0000-00-00' && $fb !== '0000-00-00 00:00:00');
-        if ($esInactivo) {
+        if ($fb !== '' && $fb !== '0000-00-00' && $fb !== '0000-00-00 00:00:00') {
             $ts = strtotime($fb);
-            if ($ts !== false && $ts < time()) {
-                return 'tr-baja';
-            }
+            if ($ts !== false && $ts < time()) return 'tr-baja';
         }
 
-        // ── Flags de estado (prioridad según gravedad) ────────────────────
-        $tienesuc   = trim($row['tienesuc']   ?? '1');
-        $trabajaos  = trim($row['trabajaos']  ?? '1');
-        $tieneprest = trim($row['tieneprest'] ?? '1');
-        $tienesucpr = trim($row['tienesucpr'] ?? '1');
-
-        // Orden: sin sucursal > sin OS > sin prestaciones > sin práctica en suc
-        if ($tienesuc   === '0') return 'tr-sin-suc';
-        if ($trabajaos  === '0') return 'tr-sin-os';
-        if ($tieneprest === '0') return 'tr-sin-prest';
-        if ($tienesucpr === '0') return 'tr-sin-suc-prac';
+        // 2. Sin OS  (salmón)   !trabajaos
+        if (!$flag($row['trabajaos']  ?? null)) return 'tr-sin-os';
+        // 3. Sin Prest (amarillo) !tieneprest
+        if (!$flag($row['tieneprest'] ?? null)) return 'tr-sin-prest';
+        // 4. Sin Suc (magenta)  !tienesuc
+        if (!$flag($row['tienesuc']   ?? null)) return 'tr-sin-suc';
+        // 5. Sin SucPrac (rosa) !tienesucpr
+        if (!$flag($row['tienesucpr'] ?? null)) return 'tr-sin-suc-prac';
+        // 6. SAB (cyan)
+        if (trim($row['sab'] ?? '') !== '')      return 'tr-sab';
 
         return '';
     }

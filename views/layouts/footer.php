@@ -9,6 +9,7 @@
 
 <!-- jQuery 3 -->
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="/sistema-medicos/public/js/validaciones.js"></script>
 <!-- Bootstrap 5 JS Bundle -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <!-- DataTables 1.13 -->
@@ -27,6 +28,10 @@
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
 <!-- Grid Helper reutilizable -->
 <script src="/sistema-medicos/public/js/grid-helper.js"></script>
+<!-- Exportación global: SheetJS + html2pdf + helper -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="/sistema-medicos/public/js/exportador.js"></script>
 
 <style>
     /* ── Reloj flotante ─────────────────────────────────────────────────── */

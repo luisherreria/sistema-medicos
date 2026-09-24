@@ -64,6 +64,7 @@ class AuthController
             'id_rol'     => $user['id_rol'],
             'full_name'  => trim($user['FIRST_NAME'] . ' ' . $user['LAST_NAME']),
         ];
+        $_SESSION['user_id']    = (int) $user['USER_ID'];
         $_SESSION['permisos']   = $permisos;
         $_SESSION['logged_at']  = time();
 

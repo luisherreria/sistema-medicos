@@ -18,6 +18,7 @@ declare(strict_types=1);
 ini_set('display_errors', '1');
 ini_set('display_startup_errors', '1');
 error_reporting(E_ALL);
+date_default_timezone_set('America/Argentina/Buenos_Aires');
 
 // ── 2. Sesión segura ─────────────────────────────────────────────────────
 ini_set('session.cookie_httponly', '1');
@@ -38,6 +39,9 @@ require_once __DIR__ . '/controllers/DashboardController.php';
 require_once __DIR__ . '/controllers/PrestadoresController.php';
 require_once __DIR__ . '/controllers/ChatController.php';
 require_once __DIR__ . '/controllers/RegistrfController.php';
+require_once __DIR__ . '/controllers/RegistrfPdfController.php';
+require_once __DIR__ . '/controllers/NomenclaController.php';
+require_once __DIR__ . '/controllers/TablaGeneralController.php';
 
 // ── 5. Resolución de ruta ─────────────────────────────────────────────────
 $route  = trim($_GET['route'] ?? '');
@@ -99,6 +103,13 @@ switch ($route) {
             case 'suc_exclu_listar':  $controller->sucExcluListar();    break;
             case 'suc_exclu_toggle':  $controller->sucExcluToggle();    break;
             case 'suc_prac_listar':   $controller->sucPracListar();     break;
+            case 'pracespe_listar':         $controller->pracespeListar();          break;
+            case 'pracespe_agregar':         $controller->pracespeAgregar();         break;
+            case 'pracespe_grupos':         $controller->pracespeGrupos();          break;
+            case 'pracespe_borrar':         $controller->pracespeBorrar();          break;
+            case 'pracespe_borrar_grupo':   $controller->pracespeBorrarGrupo();     break;
+            case 'pracespe_imprimir':       $controller->pracespeImprimir();        break;
+            case 'pracespe_buscar_catalogo':$controller->pracespeBuscarCatalogo();  break;
             case 'adj_listar':        $controller->adjListar();         break;
             case 'adj_subir':         $controller->adjSubir();          break;
             // ── Vista principal ───────────────────────────────────────────
@@ -136,6 +147,63 @@ switch ($route) {
             case 'rpt_prioritarios':  $controller->rptPrioritarios();  break;
             case 'rpt_recibos':       $controller->rptRecibos();       break;
             default:                  $controller->index();            break;
+        }
+        break;
+
+    // ── Carga Automática de Facturas PDF ──────────────────────────────────
+    case 'registro-facturas-pdf':
+    case 'registro_facturas_pdf':
+        require __DIR__ . '/registro_facturas_pdf.php';
+        break;
+    case 'subir-facturas-pdf':
+    case 'subir_facturas_pdf':
+        require __DIR__ . '/subir_facturas_pdf.php';
+        break;
+
+    // ── Módulo Nomenclador Nacional (Archivos → Nomenclador) ──────────────
+    case 'nomenclador':
+    case 'MNU_ARC_NOMENCLADOR':
+        $controller = new NomenclaController();
+        $action     = trim($_GET['action'] ?? '');
+        switch ($action) {
+            case 'accion': $controller->accionSensibles(); break;
+            default:       $controller->index();           break;
+        }
+        break;
+
+    // ── ABM tablas maestras (Archivos → Tablas / diccionario) ─────────────
+    case 'tablas-generales':
+    case 'mnu-arc-tablas':
+    case 'MNU_ARC_TABLAS':
+    case 'localidades':
+    case 'zonas':
+    case 'grupos-web':
+    case 'empresas':
+    case 'bancos':
+    case 'cierre-aumentos-tabla':
+    case 'tipos-certificados':
+    case 'valores-venta':
+    case 'url-referencias':
+    case 'tipos-cx':
+    case 'subcategorias':
+    case 'homologacion':
+    case 'grupos-autorizaciones':
+    case 'motivos-debitos':
+    case 'subgrupos-nomenclador':
+    case 'ajustes-impuestos':
+    case 'ajustes-afiliados':
+    case 'textos-rechazo':
+    case 'grupos-cartilla':
+    case 'grupos-nomenclador':
+    case 'titulo-cartilla':
+    case 'diagnosticos':
+        $controller = new TablaGeneralController();
+        $action     = trim($_GET['action'] ?? '');
+        switch ($action) {
+            case 'guardar':  $controller->guardar();  break;
+            case 'eliminar': $controller->eliminar(); break;
+            case 'obtener':  $controller->obtener();  break;
+            default:         $controller->index();    break;
         }
         break;
 

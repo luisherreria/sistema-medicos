@@ -1349,6 +1349,261 @@ class PrestadoresController
     // ══════════════════════════════════════════════════════════════════════
 
     /**
+     * GET ?route=prestadores&action=pracespe_listar&codigo=XX&busqueda=&pagina=1&por_pagina=100
+     * Lista las prácticas del prestador (tabla pracespe) con paginación y búsqueda.
+     */
+    public function pracespeListar(): void
+    {
+        $this->requireAuth();
+        $this->requirePermiso('MNU_ARC_PRESTADORES');
+        $db        = $this->db();
+        $codigo    = trim($_GET['codigo']    ?? '');
+        $busqueda  = trim($_GET['busqueda']  ?? '');
+        $pagina    = max(1, (int)($_GET['pagina']    ?? 1));
+        $porPagina = max(1, min(500, (int)($_GET['por_pagina'] ?? 100)));
+
+        if ($codigo === '') { $this->jsonError('Código requerido'); }
+
+        try {
+            $where  = "WHERE TRIM(PECODIGO) = :cod";
+            $params = [':cod' => $codigo];
+
+            if ($busqueda !== '') {
+                $where  .= " AND (TRIM(PEPRACTICA) LIKE :bus OR TRIM(PENOMBPRAC) LIKE :bus2)";
+                $params[':bus']  = "%{$busqueda}%";
+                $params[':bus2'] = "%{$busqueda}%";
+            }
+
+            $total  = (int)$db->prepare("SELECT COUNT(*) FROM pracespe {$where}")
+                               ->execute($params) ? $db->prepare("SELECT COUNT(*) FROM pracespe {$where}") : 0;
+            $stmtCnt = $db->prepare("SELECT COUNT(*) FROM pracespe {$where}");
+            $stmtCnt->execute($params);
+            $total  = (int)$stmtCnt->fetchColumn();
+            $paginas = $total > 0 ? (int)ceil($total / $porPagina) : 1;
+            $offset  = ($pagina - 1) * $porPagina;
+
+            $sql = "SELECT
+                        TRIM(PEPRACTICA) AS PEPRACTICA,
+                        TRIM(PENOMBPRAC) AS PENOMBPRAC,
+                        TRIM(PEGRUPO)    AS PEGRUPO,
+                        PEIMPORTE        AS PEIMPORTE,
+                        TRIM(PETIPO)     AS PETIPO
+                    FROM pracespe
+                    {$where}
+                    ORDER BY PEGRUPO ASC, PENOMBPRAC ASC
+                    LIMIT :lim OFFSET :off";
+
+            $stmt = $db->prepare($sql);
+            foreach ($params as $k => $v) $stmt->bindValue($k, $v);
+            $stmt->bindValue(':lim', $porPagina, PDO::PARAM_INT);
+            $stmt->bindValue(':off', $offset,    PDO::PARAM_INT);
+            $stmt->execute();
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            array_walk_recursive($rows, function (&$v) {
+                if (is_string($v)) $v = mb_convert_encoding($v, 'UTF-8', 'UTF-8, ISO-8859-1');
+            });
+            echo json_encode(['ok'=>true,'total'=>$total,'paginas'=>$paginas,'pagina'=>$pagina,'datos'=>$rows], JSON_UNESCAPED_UNICODE);
+        } catch (PDOException $e) {
+            $this->jsonError('Error al listar prácticas: ' . $e->getMessage());
+        }
+        exit;
+    }
+
+    /**
+     * POST ?route=prestadores&action=pracespe_agregar
+     * Agrega una práctica a pracespe para el prestador (si no existe ya).
+     */
+    public function pracespeAgregar(): void
+    {
+        $this->requireAuth();
+        $this->requirePermiso('MNU_ARC_PRESTADORES');
+        $db   = $this->db();
+        $body = json_decode(file_get_contents('php://input'), true) ?? [];
+        $codigo    = trim($body['codigo']     ?? '');
+        $pepractica= trim($body['pepractica'] ?? '');
+        $penombprac= trim($body['penombprac'] ?? '');
+        $pegrupo   = trim($body['pegrupo']    ?? '');
+        $petipo    = trim($body['petipo']     ?? '');
+        $peimporte = (float)($body['peimporte']?? 0);
+        $usuario   = $_SESSION['usuario'] ?? 'SYS';
+
+        if ($codigo==='' || $pepractica==='') { $this->jsonError('Código y práctica requeridos'); }
+        try {
+            // Verificar duplicado
+            $chk = $db->prepare("SELECT COUNT(*) FROM pracespe WHERE TRIM(PECODIGO)=:cod AND TRIM(PEPRACTICA)=:prac");
+            $chk->execute([':cod'=>$codigo, ':prac'=>$pepractica]);
+            if ((int)$chk->fetchColumn() > 0) { $this->jsonError('La práctica ya existe para este prestador'); }
+
+            $db->prepare(
+                "INSERT INTO pracespe (PECODIGO,PEPRACTICA,PENOMBPRAC,PEGRUPO,PETIPO,PEIMPORTE,
+                                       PEDESDE,PEHASTA,PEUSER,PEFCARGA)
+                 VALUES (:cod,:prac,:nom,:grp,:tipo,:imp,CURDATE(),'2099-12-31',:usr,NOW())"
+            )->execute([':cod'=>$codigo,':prac'=>$pepractica,':nom'=>$penombprac,
+                        ':grp'=>$pegrupo,':tipo'=>$petipo,':imp'=>$peimporte,':usr'=>$usuario]);
+
+            $db->prepare("UPDATE ebamp SET tieneprest='T' WHERE TRIM(codigo)=:cod")->execute([':cod'=>$codigo]);
+            echo json_encode(['ok'=>true], JSON_UNESCAPED_UNICODE);
+        } catch (PDOException $e) { $this->jsonError($e->getMessage()); }
+        exit;
+    }
+
+    /**
+     * GET ?route=prestadores&action=pracespe_grupos&codigo=XX
+     * Devuelve los grupos distintos del prestador en pracespe
+     */
+    public function pracespeGrupos(): void
+    {
+        $this->requireAuth();
+        $this->requirePermiso('MNU_ARC_PRESTADORES');
+        $db     = $this->db();
+        $codigo = trim($_GET['codigo'] ?? '');
+        if ($codigo === '') { $this->jsonError('Código requerido'); }
+        try {
+            $stmt = $db->prepare(
+                "SELECT DISTINCT TRIM(PEGRUPO) AS grupo FROM pracespe
+                 WHERE TRIM(PECODIGO)=:cod AND TRIM(PEGRUPO)!=''
+                 ORDER BY PEGRUPO"
+            );
+            $stmt->execute([':cod' => $codigo]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            array_walk_recursive($rows, function (&$v) {
+                if (is_string($v)) $v = mb_convert_encoding($v, 'UTF-8', 'UTF-8, ISO-8859-1');
+            });
+            echo json_encode(['ok'=>true,'grupos'=>$rows], JSON_UNESCAPED_UNICODE);
+        } catch (PDOException $e) { $this->jsonError($e->getMessage()); }
+        exit;
+    }
+
+    /**
+     * POST ?route=prestadores&action=pracespe_borrar
+     * Borra una o más prácticas de pracespe para el prestador.
+     * Body JSON: { codigo, practicas: ["000051","000052"] }
+     */
+    public function pracespeBorrar(): void
+    {
+        $this->requireAuth();
+        $this->requirePermiso('MNU_ARC_PRESTADORES');
+        $db   = $this->db();
+        $body = json_decode(file_get_contents('php://input'), true) ?? [];
+        $codigo    = trim($body['codigo']    ?? '');
+        $practicas = $body['practicas']      ?? [];
+        if ($codigo === '' || !is_array($practicas) || !$practicas) {
+            $this->jsonError('Datos insuficientes');
+        }
+        try {
+            $phs   = implode(',', array_fill(0, count($practicas), '?'));
+            $params = array_merge([$codigo], array_values($practicas));
+            $db->prepare(
+                "DELETE FROM pracespe WHERE TRIM(PECODIGO)=? AND TRIM(PEPRACTICA) IN ({$phs})"
+            )->execute($params);
+            // actualizar tieneprest en ebamp
+            $cnt = (int)$db->prepare("SELECT COUNT(*) FROM pracespe WHERE TRIM(PECODIGO)=?")->execute([$codigo])
+                   ? (int)$db->query("SELECT COUNT(*) FROM pracespe WHERE TRIM(PECODIGO)=".
+                       $db->quote($codigo))->fetchColumn() : 0;
+            $stmtCnt = $db->prepare("SELECT COUNT(*) FROM pracespe WHERE TRIM(PECODIGO)=:cod");
+            $stmtCnt->execute([':cod' => $codigo]);
+            $cnt = (int)$stmtCnt->fetchColumn();
+            $db->prepare("UPDATE ebamp SET tieneprest=:v WHERE TRIM(codigo)=:cod")
+               ->execute([':v' => $cnt > 0 ? 'T' : 'F', ':cod' => $codigo]);
+            echo json_encode(['ok'=>true,'borrados'=>count($practicas)], JSON_UNESCAPED_UNICODE);
+        } catch (PDOException $e) { $this->jsonError($e->getMessage()); }
+        exit;
+    }
+
+    /**
+     * POST ?route=prestadores&action=pracespe_borrar_grupo
+     * Borra todas las prácticas de un grupo del prestador.
+     * Body JSON: { codigo, grupo }
+     */
+    public function pracespeBorrarGrupo(): void
+    {
+        $this->requireAuth();
+        $this->requirePermiso('MNU_ARC_PRESTADORES');
+        $db   = $this->db();
+        $body = json_decode(file_get_contents('php://input'), true) ?? [];
+        $codigo = trim($body['codigo'] ?? '');
+        $grupo  = trim($body['grupo']  ?? '');
+        if ($codigo === '' || $grupo === '') { $this->jsonError('Código y grupo requeridos'); }
+        try {
+            $stmt = $db->prepare("DELETE FROM pracespe WHERE TRIM(PECODIGO)=:cod AND TRIM(PEGRUPO)=:grp");
+            $stmt->execute([':cod' => $codigo, ':grp' => $grupo]);
+            $borrados = $stmt->rowCount();
+            $stmtCnt = $db->prepare("SELECT COUNT(*) FROM pracespe WHERE TRIM(PECODIGO)=:cod");
+            $stmtCnt->execute([':cod' => $codigo]);
+            $cnt = (int)$stmtCnt->fetchColumn();
+            $db->prepare("UPDATE ebamp SET tieneprest=:v WHERE TRIM(codigo)=:cod")
+               ->execute([':v' => $cnt > 0 ? 'T' : 'F', ':cod' => $codigo]);
+            echo json_encode(['ok'=>true,'borrados'=>$borrados], JSON_UNESCAPED_UNICODE);
+        } catch (PDOException $e) { $this->jsonError($e->getMessage()); }
+        exit;
+    }
+
+    /**
+     * GET ?route=prestadores&action=pracespe_imprimir&codigo=XX
+     * Devuelve datos para impresión de prácticas del prestador.
+     */
+    public function pracespeImprimir(): void
+    {
+        $this->requireAuth();
+        $this->requirePermiso('MNU_ARC_PRESTADORES');
+        $db     = $this->db();
+        $codigo = trim($_GET['codigo'] ?? '');
+        if ($codigo === '') { $this->jsonError('Código requerido'); }
+        try {
+            $nombre = $db->prepare("SELECT TRIM(nombre) FROM ebamp WHERE TRIM(codigo)=:cod");
+            $nombre->execute([':cod' => $codigo]);
+            $nombrePrest = mb_convert_encoding((string)$nombre->fetchColumn(), 'UTF-8', 'UTF-8, ISO-8859-1');
+
+            $stmt = $db->prepare(
+                "SELECT TRIM(PEPRACTICA) AS PEPRACTICA, TRIM(PENOMBPRAC) AS PENOMBPRAC,
+                        TRIM(PEGRUPO) AS PEGRUPO, TRIM(PETIPO) AS PETIPO,
+                        PEIMPORTE, PEPORCE,
+                        DATE_FORMAT(PEDESDE,'%d/%m/%Y') AS PEDESDE,
+                        DATE_FORMAT(PEHASTA,'%d/%m/%Y') AS PEHASTA
+                 FROM pracespe WHERE TRIM(PECODIGO)=:cod
+                 ORDER BY PEGRUPO, PEPRACTICA"
+            );
+            $stmt->execute([':cod' => $codigo]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            array_walk_recursive($rows, function (&$v) {
+                if (is_string($v)) $v = mb_convert_encoding($v, 'UTF-8', 'UTF-8, ISO-8859-1');
+            });
+            echo json_encode(['ok'=>true,'prestNombre'=>$nombrePrest,'datos'=>$rows], JSON_UNESCAPED_UNICODE);
+        } catch (PDOException $e) { $this->jsonError($e->getMessage()); }
+        exit;
+    }
+
+    /**
+     * GET ?route=prestadores&action=pracespe_buscar_catalogo&q=...
+     * Busca prácticas en pracespe (catálogo global, DISTINCT por código+nombre)
+     */
+    public function pracespeBuscarCatalogo(): void
+    {
+        $this->requireAuth();
+        $this->requirePermiso('MNU_ARC_PRESTADORES');
+        $db = $this->db();
+        $q  = trim($_GET['q'] ?? '');
+        if (strlen($q) < 2) { echo json_encode(['ok'=>true,'data'=>[]]); exit; }
+        try {
+            $like = "%{$q}%";
+            $stmt = $db->prepare(
+                "SELECT DISTINCT TRIM(PEPRACTICA) AS PEPRACTICA, TRIM(PENOMBPRAC) AS PENOMBPRAC,
+                        TRIM(PEGRUPO) AS PEGRUPO, TRIM(PETIPO) AS PETIPO, PEIMPORTE
+                 FROM pracespe
+                 WHERE TRIM(PEPRACTICA) LIKE :q1 OR TRIM(PENOMBPRAC) LIKE :q2
+                 ORDER BY PENOMBPRAC LIMIT 30"
+            );
+            $stmt->execute([':q1' => $like, ':q2' => $like]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            array_walk_recursive($rows, function (&$v) {
+                if (is_string($v)) $v = mb_convert_encoding($v, 'UTF-8', 'UTF-8, ISO-8859-1');
+            });
+            echo json_encode(['ok'=>true,'data'=>$rows], JSON_UNESCAPED_UNICODE);
+        } catch (PDOException $e) { $this->jsonError($e->getMessage()); }
+        exit;
+    }
+
+    /**
      * GET ?route=prestadores&action=adj_listar&codigo=XXX
      */
     public function adjListar(): void

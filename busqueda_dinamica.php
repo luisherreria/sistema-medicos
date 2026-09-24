@@ -1,0 +1,183 @@
+<?php
+/**
+ * busqueda_dinamica.php
+ * AJAX: validar / buscar prestador (ebamp) y obra social (obrasoc).
+ * PHP 5.6 — PDO, array(), isset(), try/catch.
+ */
+
+require_once dirname(__FILE__) . '/includes/facturas_pdf_common.php';
+
+rfpRequireAuth();
+rfpRequirePermiso();
+
+header('Content-Type: application/json; charset=utf-8');
+
+if (!rfpCsrfOk()) {
+    rfpJsonError('Token de seguridad inválido.');
+}
+
+$accion = isset($_POST['accion']) ? trim($_POST['accion']) : '';
+$tipo   = isset($_POST['tipo_busqueda']) ? trim($_POST['tipo_busqueda']) : '';
+if ($tipo === '' && isset($_POST['tipo'])) {
+    $tipo = trim($_POST['tipo']);
+}
+$valor = isset($_POST['valor']) ? trim($_POST['valor']) : '';
+
+$tipo   = strtolower($tipo);
+$accion = strtolower($accion);
+
+if ($accion !== 'validar' && $accion !== 'buscar') {
+    rfpJsonError('Acción no válida.');
+}
+if ($tipo !== 'prestador' && $tipo !== 'obrasoc') {
+    rfpJsonError('Tipo de búsqueda no válido.');
+}
+
+try {
+    $db = rfpDb();
+
+    if ($accion === 'validar') {
+        if ($valor === '') {
+            rfpJsonOk(array('existe' => false, 'error' => 'Valor vacío.'));
+        }
+
+        if ($tipo === 'prestador') {
+            $stmt = $db->prepare(
+                'SELECT TRIM(codigo) AS codigo
+                 FROM ebamp
+                 WHERE TRIM(codigo) = :valor
+                 LIMIT 1'
+            );
+            $stmt->execute(array(':valor' => $valor));
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($row && isset($row['codigo']) && $row['codigo'] !== '') {
+                rfpJsonOk(array(
+                    'existe' => true,
+                    'codigo' => $row['codigo'],
+                ));
+            }
+            rfpJsonOk(array('existe' => false, 'error' => 'Prestador no encontrado.'));
+        }
+
+        $stmt = $db->prepare(
+            'SELECT TRIM(TACODIGO) AS tacodigo
+             FROM obrasoc
+             WHERE TRIM(TACODIGO) = :valor
+             LIMIT 1'
+        );
+        $stmt->execute(array(':valor' => $valor));
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row && isset($row['tacodigo']) && $row['tacodigo'] !== '') {
+            rfpJsonOk(array(
+                'existe'   => true,
+                'tacodigo' => $row['tacodigo'],
+            ));
+        }
+        rfpJsonOk(array('existe' => false, 'error' => 'Obra social no encontrada.'));
+    }
+
+    // accion == buscar
+    $like = '%' . $valor . '%';
+
+    if ($accion == 'buscar' && $tipo == 'prestador') {
+        $valor_original = trim(isset($_POST['valor']) ? $_POST['valor'] : $valor);
+
+        $unwanted_array = array(
+            'Š'=>'S', 'š'=>'s', 'Ž'=>'Z', 'ž'=>'z', 'À'=>'A', 'Á'=>'A', 'Â'=>'A', 'Ã'=>'A', 'Ä'=>'A', 'Å'=>'A', 'Æ'=>'A', 'Ç'=>'C',
+            'È'=>'E', 'É'=>'E', 'Ê'=>'E', 'Ë'=>'E', 'Ì'=>'I', 'Í'=>'I', 'Î'=>'I', 'Ï'=>'I', 'Ñ'=>'N', 'Ò'=>'O', 'Ó'=>'O', 'Ô'=>'O',
+            'Õ'=>'O', 'Ö'=>'O', 'Ø'=>'O', 'Ù'=>'U', 'Ú'=>'U', 'Û'=>'U', 'Ü'=>'U', 'Ý'=>'Y', 'Þ'=>'B', 'ß'=>'Ss',
+            'à'=>'a', 'á'=>'a', 'â'=>'a', 'ã'=>'a', 'ä'=>'a', 'å'=>'a', 'æ'=>'a', 'ç'=>'c', 'è'=>'e', 'é'=>'e', 'ê'=>'e', 'ë'=>'e',
+            'ì'=>'i', 'í'=>'i', 'î'=>'i', 'ï'=>'i', 'ð'=>'o', 'ñ'=>'n', 'ò'=>'o', 'ó'=>'o', 'ô'=>'o', 'õ'=>'o', 'ö'=>'o', 'ø'=>'o',
+            'ù'=>'u', 'ú'=>'u', 'û'=>'u', 'ý'=>'y', 'þ'=>'b', 'ÿ'=>'y',
+        );
+        $valor_sin_acentos = strtr($valor_original, $unwanted_array);
+
+        $valor_sin_puntuacion = str_replace(array('.', ',', '-'), ' ', $valor_sin_acentos);
+        $valor_limpio = strtoupper($valor_sin_puntuacion);
+
+        $stop_words = array(
+            'S R L', 'SRL', 'S A', 'SA', 'S A U', 'SAU',
+            'CLINICA', 'CLINICAS', 'CLÍNICA', 'SANATORIO', 'LABORATORIO',
+            'CENTRO', 'HOSPITAL', 'INSTITUTO', 'SALUD', 'INTEGRAL', 'SERVICIOS',
+            'DE', 'LA', 'LAS', 'LOS', 'EL', 'Y',
+            'DIAGNOSTICO', 'TRATAMIENTO', 'MEDICO', 'MEDICOS', 'MEDICA',
+            'PRIVADO', 'PRIVADA', 'ASOCIACION',
+        );
+
+        foreach ($stop_words as $word) {
+            $valor_limpio = preg_replace('/\b' . preg_quote($word, '/') . '\b/i', '', $valor_limpio);
+        }
+
+        $valor_limpio = trim(preg_replace('/\s+/', ' ', $valor_limpio));
+
+        $valor_busqueda = ($valor_limpio === '')
+            ? strtoupper(trim(preg_replace('/\s+/', ' ', $valor_sin_puntuacion)))
+            : $valor_limpio;
+
+        $valor_busqueda_comodines = str_replace(' ', '%', $valor_busqueda);
+        $parametro_sql = '%' . $valor_busqueda_comodines . '%';
+
+        $stmt = $db->prepare(
+            'SELECT TRIM(codigo) AS codigo,
+                    TRIM(nombre) AS nombre,
+                    TRIM(nomfantas) AS nomfantas,
+                    TRIM(categ) AS categ
+             FROM ebamp
+             WHERE nombre LIKE :val1 OR nomfantas LIKE :val2
+             LIMIT 20'
+        );
+        $stmt->execute(array(
+            ':val1' => $parametro_sql,
+            ':val2' => $parametro_sql,
+        ));
+        $resultados = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (!is_array($resultados)) {
+            $resultados = array();
+        }
+
+        rfpJsonOk(array(
+            'status'     => 'success',
+            'data'       => $resultados,
+            'resultados' => $resultados,
+        ));
+    }
+
+    $rows = array();
+    if ($valor !== '') {
+        $stmt = $db->prepare(
+            'SELECT TRIM(TACODIGO) AS tacodigo,
+                    TRIM(TADESCRIP) AS tadescrip
+             FROM obrasoc
+             WHERE TRIM(TACODIGO) = :exact
+                OR TACODIGO LIKE :like1
+                OR TADESCRIP LIKE :like2
+             ORDER BY TADESCRIP ASC
+             LIMIT 80'
+        );
+        $stmt->execute(array(
+            ':exact' => $valor,
+            ':like1' => $like,
+            ':like2' => $like,
+        ));
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+    if (!is_array($rows) || !$rows) {
+        $stmt = $db->prepare(
+            'SELECT TRIM(TACODIGO) AS tacodigo,
+                    TRIM(TADESCRIP) AS tadescrip
+             FROM obrasoc
+             ORDER BY TADESCRIP ASC
+             LIMIT 300'
+        );
+        $stmt->execute();
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (!is_array($rows)) {
+            $rows = array();
+        }
+    }
+    rfpJsonOk(array('resultados' => $rows));
+} catch (PDOException $e) {
+    rfpJsonError('Error de base de datos: ' . $e->getMessage());
+} catch (Exception $e) {
+    rfpJsonError($e->getMessage());
+}

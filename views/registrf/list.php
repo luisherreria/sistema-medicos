@@ -90,6 +90,10 @@ tailwind.config = { corePlugins: { preflight: false } };
             <i class="fa-solid fa-print me-1"></i>Imprimir
         </button>
 
+        <a href="index.php?route=registro-facturas-pdf"
+           class="btn btn-sm btn-info flex-shrink-0"
+           style="color: white;font-size:0.78rem;">📋 Ver Pendientes</a>
+
         <!-- Terminar -->
         <a href="index.php?route=dashboard"
            class="btn btn-sm btn-danger fw-semibold flex-shrink-0 ms-auto"

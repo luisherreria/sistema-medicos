@@ -102,22 +102,22 @@ foreach (($_SESSION['permisos'] ?? []) as $p) {
         <span style="font-size:0.88rem;">
             <i class="fa-solid fa-table me-2"></i>Listado de Prestadores
         </span>
-        <!-- Leyenda de colores -->
+        <!-- Leyenda de colores (colores exactos VFP) -->
         <div class="d-flex flex-wrap gap-1 align-items-center" style="font-size:0.7rem;">
-            <span class="px-2 py-1 rounded fw-semibold" style="background:#e91e63;color:#fff;border:1px solid #c2185b;">
-                Sin Sucursal
+            <span class="px-2 py-1 rounded fw-semibold" style="background:#e1c4ff;color:#4a0080;border:1px solid #c090e0;">
+                De baja
             </span>
-            <span class="px-2 py-1 rounded fw-semibold" style="background:#ff9800;color:#fff;border:1px solid #f57c00;">
+            <span class="px-2 py-1 rounded fw-semibold" style="background:#fd7a60;color:#fff;border:1px solid #cc4030;">
                 Sin O.Social
             </span>
-            <span class="px-2 py-1 rounded fw-semibold" style="background:#ffc107;color:#212529;border:1px solid #ffa000;">
+            <span class="px-2 py-1 rounded fw-semibold" style="background:#ffff60;color:#5c5c00;border:1px solid #cccc00;">
                 Sin Prestaciones
             </span>
-            <span class="px-2 py-1 rounded fw-semibold" style="background:#9c27b0;color:#fff;border:1px solid #7b1fa2;">
-                Sin Práctica Suc.
+            <span class="px-2 py-1 rounded fw-semibold" style="background:#ff0080;color:#fff;border:1px solid #cc0066;">
+                Sin Sucursal
             </span>
-            <span class="px-2 py-1 rounded fw-semibold" style="background:#ede7f6;color:#6a1b9a;border:1px solid #ce93d8;">
-                De baja
+            <span class="px-2 py-1 rounded fw-semibold" style="background:#ff80c0;color:#5c0033;border:1px solid #e05090;">
+                Sin Práctica Suc.
             </span>
         </div>
     </div>
@@ -129,8 +129,8 @@ foreach (($_SESSION['permisos'] ?? []) as $p) {
     </div>
 
     <!-- Tabla (oculta hasta que carguen los datos) -->
-    <div id="prest-table-wrap" class="p-0" style="display:none;">
-        <div class="table-responsive">
+    <div id="prest-table-wrap" class="p-0" style="display:none; overflow:visible;">
+        <div class="table-responsive" style="overflow:visible !important;">
             <table class="table table-hover table-bordered mb-0"
                    id="tbl-prestadores"
                    style="font-size:0.76rem; white-space:nowrap;">
@@ -187,6 +187,9 @@ foreach (($_SESSION['permisos'] ?? []) as $p) {
 <?php require_once __DIR__ . '/_modal_obras_sociales.php'; ?>
 <?php require_once __DIR__ . '/_modal_editar_prestador.php'; ?>
 <?php require_once __DIR__ . '/_modal_sucursales.php'; ?>
+<?php require_once __DIR__ . '/_modal_practicas.php'; ?>
+<?php require_once __DIR__ . '/_modal_excl_os.php'; ?>
+<?php require_once __DIR__ . '/_modal_excl_practicas.php'; ?>
 
 
 <!-- ═══════════════════════════════════════════════════════════════════════
@@ -507,7 +510,7 @@ foreach (($_SESSION['permisos'] ?? []) as $p) {
             + '</a></li>'
 
             /* Borrar */
-            + '<li><a class="dropdown-item disabled" href="#"'
+            + '<li><a class="dropdown-item" href="#"'
             + '  data-prest-action="borrar" data-codigo="' + codigo + '" data-nombre="' + nombre + '">'
             + '  <i class="fa-solid fa-trash me-2 text-danger"></i>Borrar'
             + '</a></li>'
@@ -523,7 +526,7 @@ foreach (($_SESSION['permisos'] ?? []) as $p) {
             + '<li><hr class="dropdown-divider"></li>'
 
             /* Prácticas */
-            + '<li><a class="dropdown-item disabled" href="#"'
+            + '<li><a class="dropdown-item" href="#"'
             + '  data-prest-action="practicas" data-codigo="' + codigo + '" data-nombre="' + nombre + '">'
             + '  <i class="fa-solid fa-syringe me-2 text-secondary"></i>Prácticas'
             + '</a></li>'
@@ -531,23 +534,23 @@ foreach (($_SESSION['permisos'] ?? []) as $p) {
             + '<li><hr class="dropdown-divider"></li>'
 
             /* Sucursales */
-            + '<li><a class="dropdown-item disabled" href="#"'
+            + '<li><a class="dropdown-item" href="#"'
             + '  data-prest-action="sucursales" data-codigo="' + codigo + '" data-nombre="' + nombre + '">'
-            + '  <i class="fa-solid fa-map-location-dot me-2 text-secondary"></i>Sucursales'
+            + '  <i class="fa-solid fa-map-location-dot me-2 text-primary"></i>Sucursales'
             + '</a></li>'
 
             + '<li><hr class="dropdown-divider"></li>'
 
             /* Exclusión Cartilla */
-            + '<li><a class="dropdown-item disabled" href="#"'
+            + '<li><a class="dropdown-item" href="#"'
             + '  data-prest-action="excl_cartilla" data-codigo="' + codigo + '" data-nombre="' + nombre + '">'
-            + '  <i class="fa-solid fa-address-book me-2 text-secondary"></i>Exclusión Cartilla'
+            + '  <i class="fa-solid fa-address-book me-2 text-warning"></i>Exclusión Cartilla'
             + '</a></li>'
 
             /* Exclusión Prácticas */
-            + '<li><a class="dropdown-item disabled" href="#"'
+            + '<li><a class="dropdown-item" href="#"'
             + '  data-prest-action="excl_practicas" data-codigo="' + codigo + '" data-nombre="' + nombre + '">'
-            + '  <i class="fa-solid fa-list-check me-2 text-secondary"></i>Exclusión Prácticas'
+            + '  <i class="fa-solid fa-list-check me-2 text-warning"></i>Exclusión Prácticas'
             + '</a></li>'
 
             + '</ul>'
@@ -568,13 +571,20 @@ foreach (($_SESSION['permisos'] ?? []) as $p) {
                 window.abrirModalEditarPrestador(codigo, nombre);
                 break;
             case 'borrar':
+                // TODO: confirmar y borrar prestador
+                alert('Borrar: ' + nombre);
+                break;
             case 'sucursales':
                 window.abrirModalSucursales(codigo, nombre);
                 break;
             case 'practicas':
+                window.abrirModalPracticas(codigo, nombre);
+                break;
             case 'excl_cartilla':
+                window.abrirModalExclOS(codigo, nombre);
+                break;
             case 'excl_practicas':
-                // TODO: implementar en fase siguiente
+                window.abrirModalExclPracticas(codigo, nombre);
                 break;
         }
     }
@@ -683,12 +693,19 @@ foreach (($_SESSION['permisos'] ?? []) as $p) {
 <style>
 .dropdown-toggle-no-caret::after { display: none !important; }
 
-/* Colores de fila según estado (equivalente VFP) */
-.tr-sin-suc      td { background-color: #fce4ec !important; }   /* Rosa  – Sin Sucursal */
-.tr-sin-os       td { background-color: #fff3e0 !important; }   /* Naranja – Sin O.Social */
-.tr-sin-prest    td { background-color: #fffde7 !important; }   /* Amarillo – Sin Prestaciones */
-.tr-sin-suc-prac td { background-color: #f3e5f5 !important; }  /* Lavanda – Sin Práctica en Suc */
-.tr-baja         td { background-color: #ede7f6 !important; color: #6a1b9a; } /* Violeta – Dado de baja */
+/* Colores de fila según estado — colores exactos VFP */
+/* 1. Baja  (violeta claro)  rgb(225,196,255) */
+.tr-baja         td { background-color: #e1c4ff !important; color: #4a0080; }
+/* 2. Sin OS (salmón/rojo)   rgb(253,122,96)  */
+.tr-sin-os       td { background-color: #fd7a60 !important; color: #5c0000; }
+/* 3. Sin Prest (amarillo)   rgb(255,255,96)  */
+.tr-sin-prest    td { background-color: #ffff60 !important; color: #5c5c00; }
+/* 4. Sin Suc (magenta)      rgb(255,0,128)   */
+.tr-sin-suc      td { background-color: #ff0080 !important; color: #fff; }
+/* 5. Sin SucPrac (rosa)     rgb(255,128,192) */
+.tr-sin-suc-prac td { background-color: #ff80c0 !important; color: #5c0033; }
+/* 6. SAB (cyan claro)       rgb(210,255,255) */
+.tr-sab          td { background-color: #d2ffff !important; color: #003d3d; }
 
 /* Columnas ordenables */
 #tbl-prestadores thead th[data-sort] {

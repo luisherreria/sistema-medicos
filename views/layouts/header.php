@@ -19,6 +19,11 @@
     <!-- DataTables 1.13 + Buttons -->
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
     <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.bootstrap5.min.css">
+    <?php if (!empty($extraCss) && is_array($extraCss)): ?>
+        <?php foreach ($extraCss as $href): ?>
+            <link rel="stylesheet" href="<?php echo htmlspecialchars($href, ENT_QUOTES, 'UTF-8'); ?>">
+        <?php endforeach; ?>
+    <?php endif; ?>
 
     <style>
         /* ── Layout base ──────────────────────────────────────────────────── */
@@ -214,24 +219,40 @@
             display: block;
         }
 
+        .menu-sub-body {
+            display: none;
+            background: #f7f9fc;
+        }
+
+        .menu-sub-body.is-open {
+            display: block;
+        }
+
         /* ── Submenú colapsable: Nivel 2 header ─────────────────────────── */
         .menu-subgroup-hdr {
             display: flex;
             align-items: center;
             gap: 10px;
-            color: #37474f;
-            font-size: 0.82rem;
-            font-weight: 600;
+            width: 100%;
+            padding: 9px 12px 9px 36px;
+            color: #263238;
+            font-size: 0.845rem;
+            font-weight: 500;
+            letter-spacing: 0;
+            text-transform: none;
+            background: transparent;
+            border: none;
             border-bottom: 1px solid #eaeff5;
             cursor: pointer;
             user-select: none;
-            transition: background 0.15s;
+            text-align: left;
             text-decoration: none;
         }
 
-        .menu-subgroup-hdr:hover {
-            background: #e8f0fe;
-            color: #1565c0;
+        .menu-subgroup-hdr:hover,
+        .menu-subgroup-hdr[aria-expanded="true"] {
+            background: #e3f2fd;
+            color: #0d47a1;
         }
 
         .menu-subgroup-hdr .menu-icon {
@@ -448,6 +469,35 @@ $initials     = strtoupper(
         $routeActual  = isset($_GET['route']) ? $_GET['route'] : 'dashboard';
         $grupos       = [];
 
+        if (!class_exists('TablaGeneralController')) {
+            require_once __DIR__ . '/../../controllers/TablaGeneralController.php';
+        }
+        $tgMenuItems  = TablaGeneralController::menuItems();
+        $tgClaves     = TablaGeneralController::clavesMenu();
+        $userIdMenu   = (int) (
+            $_SESSION['user_id']
+            ?? (isset($sessionUser['id']) ? $sessionUser['id'] : 0)
+        );
+        $esAdminMenu  = ($userIdMenu === 16);
+
+        $menuItemActivo = function ($ruta) use ($routeActual) {
+            $amp  = strpos($ruta, '&');
+            $base = ($amp === false) ? $ruta : substr($ruta, 0, $amp);
+            if ($base !== $routeActual) {
+                return false;
+            }
+            if ($amp === false) {
+                return true;
+            }
+            if (preg_match('/(?:^|&)(?:ref|tipo)=([^&]+)/', substr($ruta, $amp + 1), $m)) {
+                $refGet = strtoupper((string) (
+                    isset($_GET['ref']) ? $_GET['ref'] : (isset($_GET['tipo']) ? $_GET['tipo'] : '')
+                ));
+                return $refGet === strtoupper($m[1]);
+            }
+            return true;
+        };
+
         foreach ($permisos as $p) {
             $cat = (isset($p['CLAVE_CATEGORIA']) && $p['CLAVE_CATEGORIA'] !== '')
                    ? trim($p['CLAVE_CATEGORIA'])
@@ -494,7 +544,33 @@ $initials     = strtoupper(
             $catActiva = false;
             foreach ($items as $p) {
                 $ruta = Permission::getRoute(isset($p['CLAVE']) ? $p['CLAVE'] : '');
-                if ($ruta === $routeActual) { $catActiva = true; break; }
+                if ($menuItemActivo($ruta)) { $catActiva = true; break; }
+            }
+            if (!$catActiva && strtoupper($cat) === 'ARCHIVOS' && $routeActual === 'tablas-generales') {
+                $catActiva = true;
+            }
+
+            $itemsDirectos = $items;
+            $itemsTG       = [];
+            if (strtoupper($cat) === 'ARCHIVOS') {
+                $itemsDirectos = [];
+                foreach ($items as $p) {
+                    $claveItem  = isset($p['CLAVE']) ? strtoupper(trim((string) $p['CLAVE'])) : '';
+                    $nombreItem = isset($p['NOMBRE_PERMISO']) ? trim((string) $p['NOMBRE_PERMISO']) : '';
+                    $nombreLow  = function_exists('mb_strtolower')
+                        ? mb_strtolower($nombreItem, 'UTF-8')
+                        : strtolower($nombreItem);
+
+                    $esPadreTG = ($claveItem === 'MNU_ARC_TABLAS' || $nombreLow === 'tablas generales');
+                    $esHijoTG  = (strpos($claveItem, 'MNU_ARC_TAB_') === 0)
+                        || in_array($claveItem, $tgClaves, true);
+
+                    if ($esPadreTG || $esHijoTG) {
+                        continue;
+                    }
+                    $itemsDirectos[] = $p;
+                }
+                $itemsTG = $tgMenuItems;
             }
         ?>
 
@@ -516,13 +592,13 @@ $initials     = strtoupper(
 
                 <div id="<?= htmlspecialchars($catId) ?>"
                      class="menu-cat-body<?= $catActiva ? ' is-open' : '' ?>">
-                    <?php foreach ($items as $p):
+                    <?php foreach ($itemsDirectos as $p):
                         $clave  = isset($p['CLAVE'])          ? $p['CLAVE']          : '';
                         $nombre = isset($p['NOMBRE_PERMISO']) ? $p['NOMBRE_PERMISO'] : $clave;
                         $descr  = isset($p['DESCRIPCION'])    ? $p['DESCRIPCION']    : '';
                         $icon   = Permission::iconoPorClave($clave, $cat);
                         $ruta   = Permission::getRoute($clave);
-                        $active = ($ruta === $routeActual) ? ' active' : '';
+                        $active = $menuItemActivo($ruta) ? ' active' : '';
                         if ($nombre === '') {
                             $nombre = $clave !== '' ? $clave : 'Módulo';
                         }
@@ -537,6 +613,44 @@ $initials     = strtoupper(
                             <span class="menu-label"><?= htmlspecialchars($nombre) ?></span>
                         </a>
                     <?php endforeach; ?>
+
+                    <?php if (!empty($itemsTG)):
+                        $subId = $catId . '-tg';
+                        $subActivo = ($routeActual === 'tablas-generales');
+                    ?>
+                        <button type="button"
+                                class="menu-subgroup-hdr"
+                                data-sub-toggle="<?= htmlspecialchars($subId) ?>"
+                                aria-expanded="<?= $subActivo ? 'true' : 'false' ?>">
+                            <span class="menu-icon">
+                                <i class="fa-solid fa-table-list"></i>
+                            </span>
+                            <span class="menu-label">Tablas Generales</span>
+                            <span class="badge bg-secondary bg-opacity-25 text-secondary me-1"
+                                  style="font-size:0.6rem; font-weight:500;">
+                                <?= count($itemsTG) ?>
+                            </span>
+                            <i class="fa-solid fa-chevron-down menu-cat-chevron"></i>
+                        </button>
+                        <div id="<?= htmlspecialchars($subId) ?>"
+                             class="menu-sub-body<?= $subActivo ? ' is-open' : '' ?>">
+                            <?php foreach ($itemsTG as $tg):
+                                $rutaTg  = isset($tg['ruta']) ? $tg['ruta'] : '';
+                                $nombre  = isset($tg['titulo']) ? $tg['titulo'] : '';
+                                if ($nombre === '' || strtolower($nombre) === 'tablas generales') {
+                                    continue;
+                                }
+                                $activeTg = $menuItemActivo($rutaTg) ? ' active' : '';
+                            ?>
+                                <a href="index.php?route=<?= htmlspecialchars($rutaTg) ?>"
+                                   class="menu-item<?= $activeTg ?>"
+                                   style="padding:8px 12px 8px 48px; font-size:0.8rem;">
+                                    <span class="menu-icon"><i class="fa-solid fa-angle-right"></i></span>
+                                    <span class="menu-label"><?= htmlspecialchars($nombre) ?></span>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -575,6 +689,22 @@ $initials     = strtoupper(
     if (!root) return;
 
     root.addEventListener('click', function (e) {
+        var subBtn = e.target.closest('[data-sub-toggle]');
+        if (subBtn && root.contains(subBtn)) {
+            var subId = subBtn.getAttribute('data-sub-toggle');
+            var subPanel = document.getElementById(subId);
+            if (!subPanel) return;
+            var openingSub = !subPanel.classList.contains('is-open');
+            if (openingSub) {
+                subPanel.classList.add('is-open');
+                subBtn.setAttribute('aria-expanded', 'true');
+            } else {
+                subPanel.classList.remove('is-open');
+                subBtn.setAttribute('aria-expanded', 'false');
+            }
+            return;
+        }
+
         var btn = e.target.closest('[data-cat-toggle]');
         if (!btn || !root.contains(btn)) return;
 
@@ -588,7 +718,7 @@ $initials     = strtoupper(
         for (var i = 0; i < openPanels.length; i++) {
             openPanels[i].classList.remove('is-open');
         }
-        var openBtns = root.querySelectorAll('.menu-cat-btn[aria-expanded="true"]');
+        var openBtns = root.querySelectorAll('[data-cat-toggle][aria-expanded="true"]');
         for (var j = 0; j < openBtns.length; j++) {
             openBtns[j].setAttribute('aria-expanded', 'false');
         }
