@@ -581,8 +581,9 @@ class Permission
                     ['type'=>'item','clave'=>'MNU_ARC_NBU',           'label'=>'NBU',                  'icon'=>'fa-solid fa-file-medical'],
                     ['type'=>'item','clave'=>'MNU_ARC_KAIROS',        'label'=>'Kairos',               'icon'=>'fa-solid fa-clock-rotate-left'],
                     [
-                        'type'=>'group','label'=>'Tablas','icon'=>'fa-solid fa-table-cells',
+                        'type'=>'group','label'=>'Tablas Generales','icon'=>'fa-solid fa-table-list',
                         'children' => [
+                            ['type'=>'item','clave'=>'MNU_ARC_TAB_CABECERA_MAILS','label'=>'Cabecera Mails','route'=>'cabecera-mails','icon'=>'fa-solid fa-envelope-open-text'],
                             ['type'=>'item','clave'=>'MNU_ARC_TAB_LOCALIDADES', 'label'=>'Localidades'],
                             ['type'=>'item','clave'=>'MNU_ARC_TAB_ZONAS',       'label'=>'Zonas'],
                             ['type'=>'item','clave'=>'MNU_ARC_TAB_GRUPO_WEB',   'label'=>'Grupo Web'],

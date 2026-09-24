@@ -434,12 +434,33 @@ $initials     = strtoupper(
         // ─────────────────────────────────────────────────────────────────
         $routeActual  = isset($_GET['route']) ? $_GET['route'] : 'dashboard';
         $grupos       = [];
+        $userIdMenu   = (int) (isset($sessionUser['id']) ? $sessionUser['id'] : 0);
+        $idRolMenu    = (int) (isset($sessionUser['id_rol']) ? $sessionUser['id_rol'] : 0);
+        $esRol16Menu  = ($userIdMenu === 16 || $idRolMenu === 16);
+
+        if (!class_exists('TablaGeneralController', false)) {
+            $tgControllerPath = __DIR__ . '/../../controllers/TablaGeneralController.php';
+            if (is_file($tgControllerPath)) {
+                require_once $tgControllerPath;
+            }
+        }
 
         foreach ($permisos as $p) {
             $cat = (isset($p['CLAVE_CATEGORIA']) && $p['CLAVE_CATEGORIA'] !== '')
                    ? trim($p['CLAVE_CATEGORIA'])
                    : 'GENERAL';
             $grupos[$cat][] = $p;
+        }
+
+        // El padre visual "Tablas Generales" vive bajo ARCHIVOS (no es una
+        // categoría top-level). Fusionar TABLAS_GENERALES para que Cabecera
+        // Mails no quede en un acordeón aparte que nadie abre.
+        if (isset($grupos['TABLAS_GENERALES'])) {
+            if (!isset($grupos['ARCHIVOS'])) {
+                $grupos['ARCHIVOS'] = [];
+            }
+            $grupos['ARCHIVOS'] = array_merge($grupos['ARCHIVOS'], $grupos['TABLAS_GENERALES']);
+            unset($grupos['TABLAS_GENERALES']);
         }
 
         // Ordenar las categorías según el orden lógico definido en Permission
@@ -477,13 +498,84 @@ $initials     = strtoupper(
             $catId    = 'cat-' . preg_replace('/[^a-zA-Z0-9]/', '', $cat);
             $catLabel = Permission::nombreCategoria($cat);
             $catIcon  = Permission::iconoCategoria($cat);
+            $esArchivos   = (strtoupper((string) $cat) === 'ARCHIVOS');
+            $itemsDirectos = $items;
+            $itemsTG       = [];
 
-            // ¿Algún ítem de esta categoría está activo?
-            $catActiva = false;
-            foreach ($items as $p) {
-                $ruta = Permission::getRoute(isset($p['CLAVE']) ? $p['CLAVE'] : '');
-                if ($ruta === $routeActual) { $catActiva = true; break; }
+            if ($esArchivos) {
+                $itemsDirectos = [];
+                foreach ($items as $p) {
+                    $claveItem  = strtoupper(trim((string) (isset($p['CLAVE']) ? $p['CLAVE'] : '')));
+                    $nombreItem = isset($p['NOMBRE_PERMISO']) ? trim((string) $p['NOMBRE_PERMISO']) : '';
+                    $nombreLow  = function_exists('mb_strtolower')
+                        ? mb_strtolower($nombreItem, 'UTF-8')
+                        : strtolower($nombreItem);
+                    $esPadreTG = ($claveItem === 'MNU_ARC_TABLAS' || $nombreLow === 'tablas generales');
+                    $esHijoTG  = (strpos($claveItem, 'MNU_ARC_TAB_') === 0);
+                    if ($esPadreTG) {
+                        continue;
+                    }
+                    if ($esHijoTG) {
+                        $itemsTG[] = $p;
+                        continue;
+                    }
+                    $itemsDirectos[] = $p;
+                }
+
+                if (class_exists('TablaGeneralController') && method_exists('TablaGeneralController', 'menuItems')) {
+                    $fromCtrl = [];
+                    foreach (TablaGeneralController::menuItems() as $tg) {
+                        $tituloTg = isset($tg['titulo']) ? trim((string) $tg['titulo']) : '';
+                        if ($tituloTg === '' || strtolower($tituloTg) === 'tablas generales') {
+                            continue;
+                        }
+                        $fromCtrl[] = [
+                            'CLAVE'           => isset($tg['clave']) ? $tg['clave'] : '',
+                            'NOMBRE_PERMISO'  => $tituloTg,
+                            'CLAVE_CATEGORIA' => 'ARCHIVOS',
+                            'DESCRIPCION'     => '',
+                            '_ruta'           => isset($tg['ruta']) ? $tg['ruta'] : '',
+                        ];
+                    }
+                    if (!empty($fromCtrl)) {
+                        $itemsTG = $fromCtrl;
+                    }
+                }
+
+                $tieneCabecera = false;
+                foreach ($itemsTG as $p) {
+                    $c = strtoupper(trim((string) (isset($p['CLAVE']) ? $p['CLAVE'] : '')));
+                    if ($c === 'MNU_ARC_TAB_CABECERA_MAILS') {
+                        $tieneCabecera = true;
+                        break;
+                    }
+                }
+                $puedeCabecera = $esRol16Menu
+                    || Permission::tiene($permisos, 'MNU_ARC_TAB_CABECERA_MAILS');
+                if (!$tieneCabecera && $puedeCabecera) {
+                    array_unshift($itemsTG, [
+                        'CLAVE'           => 'MNU_ARC_TAB_CABECERA_MAILS',
+                        'NOMBRE_PERMISO'  => 'Cabecera Mails',
+                        'CLAVE_CATEGORIA' => 'TABLAS_GENERALES',
+                        'DESCRIPCION'     => 'ABM de plantillas de correo (t_plantillas_emails).',
+                        '_ruta'           => 'cabecera-mails',
+                    ]);
+                }
             }
+
+            $catActiva = false;
+            foreach (array_merge($itemsDirectos, $itemsTG) as $p) {
+                $ruta = (!empty($p['_ruta']))
+                    ? $p['_ruta']
+                    : Permission::getRoute(isset($p['CLAVE']) ? $p['CLAVE'] : '');
+                $amp  = strpos($ruta, '&');
+                $base = ($amp === false) ? $ruta : substr($ruta, 0, $amp);
+                if ($base === $routeActual) { $catActiva = true; break; }
+            }
+            if (!$catActiva && $esArchivos && ($routeActual === 'cabecera-mails' || $routeActual === 'tablas-generales')) {
+                $catActiva = true;
+            }
+            $tgActivo = ($routeActual === 'cabecera-mails' || $routeActual === 'tablas-generales');
         ?>
 
             <!-- ── Categoría: <?= htmlspecialchars($catLabel) ?> ── -->
@@ -502,7 +594,7 @@ $initials     = strtoupper(
                         <?= htmlspecialchars($catLabel) ?>
                         <span class="badge bg-secondary bg-opacity-25 text-secondary ms-auto me-2"
                               style="font-size:0.65rem; font-weight:500;">
-                            <?= count($items) ?>
+                            <?= count($itemsDirectos) + count($itemsTG) ?>
                         </span>
                     </button>
                 </div>
@@ -513,12 +605,12 @@ $initials     = strtoupper(
                      data-bs-parent="#mainMenu">
 
                     <div class="accordion-body p-0">
-                    <?php foreach ($items as $p):
+                    <?php foreach ($itemsDirectos as $p):
                         $clave  = isset($p['CLAVE'])          ? $p['CLAVE']          : '';
                         $nombre = isset($p['NOMBRE_PERMISO']) ? $p['NOMBRE_PERMISO'] : $clave;
                         $descr  = isset($p['DESCRIPCION'])    ? $p['DESCRIPCION']    : '';
                         $icon   = Permission::iconoPorClave($clave, $cat);
-                        $ruta   = Permission::getRoute($clave);
+                        $ruta   = (!empty($p['_ruta'])) ? $p['_ruta'] : Permission::getRoute($clave);
                         $active = ($ruta === $routeActual) ? ' active' : '';
                     ?>
                         <a href="index.php?route=<?= htmlspecialchars($ruta) ?>"
@@ -531,6 +623,54 @@ $initials     = strtoupper(
                             <span class="menu-label"><?= htmlspecialchars($nombre) ?></span>
                         </a>
                     <?php endforeach; ?>
+
+                    <?php if (!empty($itemsTG)):
+                        $subId = $catId . '-tg';
+                    ?>
+                        <button type="button"
+                                class="menu-subgroup-hdr w-100 border-0 bg-transparent"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#<?= htmlspecialchars($subId) ?>"
+                                aria-expanded="<?= $tgActivo ? 'true' : 'false' ?>"
+                                aria-controls="<?= htmlspecialchars($subId) ?>"
+                                style="padding:9px 12px 9px 36px;">
+                            <span class="menu-icon">
+                                <i class="fa-solid fa-table-list"></i>
+                            </span>
+                            <span class="menu-label">Tablas Generales</span>
+                            <span class="badge bg-secondary bg-opacity-25 text-secondary me-1"
+                                  style="font-size:0.6rem; font-weight:500;">
+                                <?= count($itemsTG) ?>
+                            </span>
+                            <i class="fa-solid fa-chevron-down menu-chevron"></i>
+                        </button>
+                        <div id="<?= htmlspecialchars($subId) ?>"
+                             class="collapse<?= $tgActivo ? ' show' : '' ?>">
+                            <?php foreach ($itemsTG as $p):
+                                $clave  = isset($p['CLAVE'])          ? $p['CLAVE']          : '';
+                                $nombre = isset($p['NOMBRE_PERMISO']) ? $p['NOMBRE_PERMISO'] : $clave;
+                                $descr  = isset($p['DESCRIPCION'])    ? $p['DESCRIPCION']    : '';
+                                $icon   = Permission::iconoPorClave($clave, $cat);
+                                $ruta   = (!empty($p['_ruta'])) ? $p['_ruta'] : Permission::getRoute($clave);
+                                $amp    = strpos($ruta, '&');
+                                $base   = ($amp === false) ? $ruta : substr($ruta, 0, $amp);
+                                $active = ($base === $routeActual) ? ' active' : '';
+                                if ($nombre === '' || strtolower($nombre) === 'tablas generales') {
+                                    continue;
+                                }
+                            ?>
+                                <a href="index.php?route=<?= htmlspecialchars($ruta) ?>"
+                                   class="menu-item menu-nav-link<?= $active ?>"
+                                   style="padding:8px 12px 8px 48px; font-size:0.8rem;"
+                                   <?= $descr ? 'title="' . htmlspecialchars($descr) . '"' : '' ?>>
+                                    <span class="menu-icon">
+                                        <i class="<?= htmlspecialchars($icon) ?>"></i>
+                                    </span>
+                                    <span class="menu-label"><?= htmlspecialchars($nombre) ?></span>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
                     </div>
 
                 </div>
