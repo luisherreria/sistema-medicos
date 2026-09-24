@@ -56,6 +56,7 @@ INSERT IGNORE INTO permisos (CLAVE, NOMBRE_PERMISO, CLAVE_CATEGORIA, DESCRIPCION
 ('MNU_ARC_TAB_AJ_AFI',      'Ajustes Aud. Afiliado',       'ARCHIVOS',      'Ajustes de auditoría sobre afiliados'),
 ('MNU_ARC_TAB_TXT_REC',     'Textos de Rechazo',           'ARCHIVOS',      'Textos estándar para rechazo de prestaciones'),
 ('MNU_ARC_TAB_DIAG',        'Diagnósticos',                'ARCHIVOS',      'Tabla de diagnósticos CIE-10'),
+('MNU_ARC_TAB_CABECERA_MAILS','Cabecera Mails',            'TABLAS_GENERALES','ABM de plantillas de correo (t_plantillas_emails). Acceso exclusivo rol 16.'),
 
 -- ── CARGA DATOS ──────────────────────────────────────────────────────────────
 ('MNU_CD_PREST_INGRESO',    'Ingreso de Prestaciones',     'CARGA_DATOS',   'Carga de nuevas prestaciones al sistema'),
@@ -155,6 +156,7 @@ WHERE CLAVE IN (
     'MNU_ARC_TAB_HOMOL','MNU_ARC_TAB_GRP_AUT','MNU_ARC_TAB_MOT_DEB',
     'MNU_ARC_TAB_GRP_NN','MNU_ARC_TAB_SUBGRP_NN','MNU_ARC_TAB_AJ_IMP',
     'MNU_ARC_TAB_AJ_AFI','MNU_ARC_TAB_TXT_REC','MNU_ARC_TAB_DIAG',
+    'MNU_ARC_TAB_CABECERA_MAILS',
     -- CARGA DATOS
     'MNU_CD_PREST_INGRESO','MNU_CD_PREST_MOD','MNU_CD_FAC_INGRESO',
     'MNU_CD_FAC_LST_DET','MNU_CD_FAC_LST_TOT_AC','MNU_CD_FAC_LST_TOT_CMP','MNU_CD_DIAG',

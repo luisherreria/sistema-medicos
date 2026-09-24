@@ -163,6 +163,8 @@ class Permission
             'MNU_DASHBOARD'             => 'fa-solid fa-gauge-high',
             // Chat Telegram
             'MNU_CHAT_TELEGRAM'         => 'fa-brands fa-telegram',
+            // Tablas generales
+            'MNU_ARC_TAB_CABECERA_MAILS'=> 'fa-solid fa-envelope-open-text',
         ];
 
         if (isset($mapaClave[$clave])) {
@@ -191,6 +193,7 @@ class Permission
             'REPORTES'        => 'fa-solid fa-chart-bar',
             'UTILES'          => 'fa-solid fa-toolbox',
             'GENERAL'         => 'fa-solid fa-circle-dot',
+            'TABLAS_GENERALES'=> 'fa-solid fa-table-list',
         ];
 
         $cat = strtoupper($claveCategoria);
@@ -257,6 +260,7 @@ class Permission
             'REPORTES'        => 'Reportes',
             'UTILES'          => 'Útiles',
             'GENERAL'         => 'General',
+            'TABLAS_GENERALES'=> 'Tablas generales',
         ];
 
         $key = strtoupper($claveCategoria);
@@ -365,6 +369,7 @@ class Permission
             'MNU_ARC_TAB_AJ_AFI'      => 'ajustes-afiliados',
             'MNU_ARC_TAB_TXT_REC'     => 'textos-rechazo',
             'MNU_ARC_TAB_DIAG'        => 'diagnosticos',
+            'MNU_ARC_TAB_CABECERA_MAILS' => 'cabecera-mails',
             // ── CARGA DATOS ───────────────────────────────────────────────
             'MNU_CD_PREST_INGRESO'    => 'carga-prestaciones',
             'MNU_CD_PREST_MOD'        => 'mod-prestaciones',
@@ -506,6 +511,8 @@ class Permission
             'registro-facturas'             => 'Registración de Facturas',
             'carga-diagnosticos'            => 'Carga de Diagnósticos',
             'cierre-periodo'                => 'Cierre de Período',
+            'cabecera-mails'                => 'Cabecera Mails',
+            'plantillas-emails'             => 'Cabecera Mails',
         ];
     }
 
@@ -520,6 +527,7 @@ class Permission
     {
         return [
             'ARCHIVOS',
+            'TABLAS_GENERALES',
             'CARGA_DATOS',
             'AUTORIZACIONES',
             'AUDIT_FAC',
@@ -603,6 +611,23 @@ class Permission
                             ['type'=>'item','clave'=>'MNU_ARC_TAB_TXT_REC',     'label'=>'Textos de Rechazo'],
                             ['type'=>'item','clave'=>'MNU_ARC_TAB_DIAG',        'label'=>'Diagnósticos'],
                         ]
+                    ],
+                ]
+            ],
+
+            // ═══════════════════════════════════════════════
+            //  1b. TABLAS GENERALES
+            // ═══════════════════════════════════════════════
+            [
+                'type' => 'category', 'cat' => 'TABLAS_GENERALES',
+                'label' => 'Tablas generales', 'icon' => 'fa-solid fa-table-list',
+                'children' => [
+                    [
+                        'type'  => 'item',
+                        'clave' => 'MNU_ARC_TAB_CABECERA_MAILS',
+                        'label' => 'Cabecera Mails',
+                        'route' => 'cabecera-mails',
+                        'icon'  => 'fa-solid fa-envelope-open-text',
                     ],
                 ]
             ],
@@ -810,6 +835,7 @@ class Permission
             'CONFIGURACION'   => 'fa-solid fa-gear',
             'REPORTES'        => 'fa-solid fa-chart-bar',
             'UTILES'          => 'fa-solid fa-toolbox',
+            'TABLAS_GENERALES'=> 'fa-solid fa-table-list',
         ];
 
         $key = strtoupper($claveCategoria);
