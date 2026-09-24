@@ -328,6 +328,10 @@
 <body>
 
 <?php
+if (!class_exists('Permission')) {
+    require_once __DIR__ . '/../../models/Permission.php';
+}
+
 // Datos del usuario logueado
 $sessionUser  = $_SESSION['user']     ?? [];
 $permisos     = $_SESSION['permisos'] ?? [];

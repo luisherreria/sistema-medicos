@@ -37,6 +37,7 @@ require_once __DIR__ . '/controllers/AuthController.php';
 require_once __DIR__ . '/controllers/DashboardController.php';
 require_once __DIR__ . '/controllers/PrestadoresController.php';
 require_once __DIR__ . '/controllers/ChatController.php';
+require_once __DIR__ . '/controllers/PlantillasEmailsController.php';
 
 // ── 5. Resolución de ruta ─────────────────────────────────────────────────
 $route  = trim($_GET['route'] ?? '');
@@ -116,6 +117,21 @@ switch ($route) {
             case 'send':        $controller->sendMessage();    break;
             case 'saveContact': $controller->saveContact();    break;
             default:            $controller->index();          break;
+        }
+        break;
+
+    // ── Tablas generales → Cabecera Mails (t_plantillas_emails) ───────────
+    case 'cabecera-mails':
+    case 'plantillas-emails':
+    case 'MNU_ARC_TAB_CABECERA_MAILS':
+        $controller = new PlantillasEmailsController();
+        $action     = trim($_GET['action'] ?? '');
+        switch ($action) {
+            case 'listado':  $controller->listado();  break;
+            case 'obtener':  $controller->obtener();  break;
+            case 'guardar':  $controller->guardar();  break;
+            case 'eliminar': $controller->eliminar(); break;
+            default:         $controller->index();    break;
         }
         break;
 
