@@ -2,52 +2,96 @@
  * Validaciones globales COMEDICA.
  * Requiere jQuery. Se carga desde views/layouts/footer.php.
  */
+
+// Premisa del sistema: Override global de alert() nativo a SweetAlert2
+if (typeof window !== 'undefined') {
+    // Guardamos una copia del alert original por seguridad
+    window.nativeAlert = window.alert;
+
+    // Sobrescribimos la función alert global
+    window.alert = function (mensaje) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Atención',
+                text: mensaje,
+                confirmButtonColor: '#0d6efd',
+                confirmButtonText: 'Aceptar'
+            });
+        } else {
+            // Fallback seguro si la librería no llegó a cargar
+            window.nativeAlert(mensaje);
+        }
+    };
+}
 (function ($) {
     if (typeof $ === 'undefined') {
         return;
     }
 
-    $(document).on('input', '.validar-periodo', function () {
-        var input = $(this);
-        var val = input.val().replace(/[^0-9]/g, '');
-
-        if (val.length > 2) {
-            val = val.substring(0, 2) + '/' + val.substring(2, 4);
+    function rfpEstiloPeriodo($input, estado) {
+        if (estado === 'error') {
+            $input.css({
+                'border-color': '#dc3545',
+                'box-shadow': '0 0 0 0.25rem rgba(220, 53, 69, 0.25)',
+                'color': '#dc3545'
+            });
+            return;
         }
-        input.val(val);
+        if (estado === 'ok') {
+            $input.css({
+                'border-color': '#198754',
+                'box-shadow': 'none',
+                'color': 'inherit'
+            });
+            return;
+        }
+        $input.css({
+            'border-color': '',
+            'box-shadow': '',
+            'color': 'inherit'
+        });
+    }
+
+    // Auto-formateo y validación visual en tiempo real para AA/MM
+    $(document).on('input', '.validar-periodo', function () {
+        var $input = $(this);
+        var valor = $input.val().replace(/[^0-9]/g, '');
+
+        if (valor.length > 2) {
+            valor = valor.substring(0, 2) + '/' + valor.substring(2, 4);
+        }
+        $input.val(valor);
+
+        if (valor.length === 5) {
+            var partes = valor.split('/');
+            var yy = parseInt(partes[0], 10);
+            var mm = parseInt(partes[1], 10);
+            var esValido = true;
+
+            if (mm < 1 || mm > 12) {
+                esValido = false;
+            }
+
+            var fechaActual = new Date();
+            var anioActual = fechaActual.getFullYear() % 100;
+            var anioAnterior = (fechaActual.getFullYear() - 1) % 100;
+            if (yy > anioActual || yy < anioAnterior) {
+                esValido = false;
+            }
+
+            rfpEstiloPeriodo($input, esValido ? 'ok' : 'error');
+        } else {
+            rfpEstiloPeriodo($input, 'neutral');
+        }
     });
 
-    $(document).on('change', '.validar-periodo', function () {
-        var valor = $(this).val().trim();
-        if (valor === '') {
-            return;
-        }
+    $(document).on('blur', '.validar-periodo', function () {
+        var $input = $(this);
+        var valor = $input.val();
 
-        if (valor.length !== 5 || valor.indexOf('/') === -1) {
-            alert('El formato del período debe ser AA/MM (Ej: 26/08).');
-            $(this).val('').focus();
-            return;
-        }
-
-        var partes = valor.split('/');
-        var aa = parseInt(partes[0], 10);
-        var mm = parseInt(partes[1], 10);
-
-        var fechaActual = new Date();
-        var anioActual = fechaActual.getFullYear() % 100;
-        var anioAnterior = (fechaActual.getFullYear() - 1) % 100;
-
-        if (aa > anioActual || aa < anioAnterior) {
-            var aaAnt = anioAnterior < 10 ? ('0' + anioAnterior) : anioAnterior;
-            alert('Error: El año del período (' + partes[0] + ') no es válido. Solo se permite el año actual (' + anioActual + ') o el anterior (' + aaAnt + ').');
-            $(this).val('').focus();
-            return;
-        }
-
-        if (mm < 1 || mm > 12) {
-            alert('Error: El mes ingresado (' + partes[1] + ') no es válido. Debe estar comprendido entre 01 y 12.');
-            $(this).val('').focus();
-            return;
+        if (valor.length > 0 && valor.length < 5) {
+            $input.css('border-color', '#dc3545');
         }
     });
 })(window.jQuery);

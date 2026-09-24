@@ -80,7 +80,7 @@ try {
     $like = '%' . $valor . '%';
 
     if ($accion == 'buscar' && $tipo == 'prestador') {
-        $valor_original = trim(isset($_POST['valor']) ? $_POST['valor'] : $valor);
+        $termino_original = trim(isset($_POST['valor']) ? $_POST['valor'] : $valor);
 
         $unwanted_array = array(
             'Š'=>'S', 'š'=>'s', 'Ž'=>'Z', 'ž'=>'z', 'À'=>'A', 'Á'=>'A', 'Â'=>'A', 'Ã'=>'A', 'Ä'=>'A', 'Å'=>'A', 'Æ'=>'A', 'Ç'=>'C',
@@ -90,32 +90,62 @@ try {
             'ì'=>'i', 'í'=>'i', 'î'=>'i', 'ï'=>'i', 'ð'=>'o', 'ñ'=>'n', 'ò'=>'o', 'ó'=>'o', 'ô'=>'o', 'õ'=>'o', 'ö'=>'o', 'ø'=>'o',
             'ù'=>'u', 'ú'=>'u', 'û'=>'u', 'ý'=>'y', 'þ'=>'b', 'ÿ'=>'y',
         );
-        $valor_sin_acentos = strtr($valor_original, $unwanted_array);
+        $termino_original = strtr($termino_original, $unwanted_array);
 
-        $valor_sin_puntuacion = str_replace(array('.', ',', '-'), ' ', $valor_sin_acentos);
-        $valor_limpio = strtoupper($valor_sin_puntuacion);
-
-        $stop_words = array(
-            'S R L', 'SRL', 'S A', 'SA', 'S A U', 'SAU',
-            'CLINICA', 'CLINICAS', 'CLÍNICA', 'SANATORIO', 'LABORATORIO',
-            'CENTRO', 'HOSPITAL', 'INSTITUTO', 'SALUD', 'INTEGRAL', 'SERVICIOS',
-            'DE', 'LA', 'LAS', 'LOS', 'EL', 'Y',
-            'DIAGNOSTICO', 'TRATAMIENTO', 'MEDICO', 'MEDICOS', 'MEDICA',
-            'PRIVADO', 'PRIVADA', 'ASOCIACION',
-        );
-
-        foreach ($stop_words as $word) {
-            $valor_limpio = preg_replace('/\b' . preg_quote($word, '/') . '\b/i', '', $valor_limpio);
+        // 1. Reemplazar puntuación con espacios para despegar palabras (ej: "S.A.FACTURA" -> "S A FACTURA")
+        $q_limpio = @preg_replace('/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]/u', ' ', $termino_original);
+        if ($q_limpio === null) {
+            $q_limpio = preg_replace('/[^a-zA-Z0-9]/', ' ', $termino_original);
         }
 
-        $valor_limpio = trim(preg_replace('/\s+/', ' ', $valor_limpio));
+        // 2. Separar el string en un array de palabras
+        $palabras = preg_split('/\s+/', $q_limpio, -1, PREG_SPLIT_NO_EMPTY);
+        if (!is_array($palabras)) {
+            $palabras = array();
+        }
 
-        $valor_busqueda = ($valor_limpio === '')
-            ? strtoupper(trim(preg_replace('/\s+/', ' ', $valor_sin_puntuacion)))
-            : $valor_limpio;
+        // 3. Palabras basura de OCR que no deben buscarse
+        $basura_ocr = array(
+            'S', 'A', 'SA', 'SRL', 'FACTURA', 'ORIGINAL', 'DUPLICADO', 'COMPROBANTE',
+            'C', 'DE', 'LA', 'EL', 'LOS', 'LAS', 'EN', 'Y', 'PARA',
+        );
 
-        $valor_busqueda_comodines = str_replace(' ', '%', $valor_busqueda);
-        $parametro_sql = '%' . $valor_busqueda_comodines . '%';
+        $palabras_utiles = array();
+        foreach ($palabras as $p) {
+            $p_upper = strtoupper($p);
+            if (!in_array($p_upper, $basura_ocr) && strlen($p_upper) > 2) {
+                $palabras_utiles[] = $p_upper;
+            }
+        }
+
+        if (empty($palabras_utiles)) {
+            $palabras_utiles = array();
+            foreach ($palabras as $p) {
+                $p_upper = strtoupper(trim($p));
+                if ($p_upper !== '') {
+                    $palabras_utiles[] = $p_upper;
+                }
+            }
+        }
+
+        if (empty($palabras_utiles)) {
+            rfpJsonOk(array(
+                'status'     => 'success',
+                'data'       => array(),
+                'resultados' => array(),
+            ));
+        }
+
+        // 4. WHERE dinámico: todas las palabras útiles deben coincidir (AND)
+        $where_condiciones = array();
+        $params = array();
+        foreach ($palabras_utiles as $i => $palabra) {
+            $where_condiciones[] = '(nombre LIKE :pn' . $i . ' OR nomfantas LIKE :pf' . $i . ')';
+            $params[':pn' . $i] = '%' . $palabra . '%';
+            $params[':pf' . $i] = '%' . $palabra . '%';
+        }
+
+        $where_sql = implode(' AND ', $where_condiciones);
 
         $stmt = $db->prepare(
             'SELECT TRIM(codigo) AS codigo,
@@ -123,13 +153,10 @@ try {
                     TRIM(nomfantas) AS nomfantas,
                     TRIM(categ) AS categ
              FROM ebamp
-             WHERE nombre LIKE :val1 OR nomfantas LIKE :val2
+             WHERE ' . $where_sql . '
              LIMIT 20'
         );
-        $stmt->execute(array(
-            ':val1' => $parametro_sql,
-            ':val2' => $parametro_sql,
-        ));
+        $stmt->execute($params);
         $resultados = $stmt->fetchAll(PDO::FETCH_ASSOC);
         if (!is_array($resultados)) {
             $resultados = array();

@@ -156,9 +156,17 @@ require_once dirname(__FILE__) . '/views/layouts/header.php';
 #resultadosPrestador tr,
 #resultadosObraSoc tr { cursor: pointer; }
 #resultadosPrestador tr:hover,
-#resultadosObraSoc tr:hover,
+#resultadosObraSoc tr:hover { background: #bbdefb; }
+#resultadosPrestador tr.fila-seleccionada,
+#resultadosObraSoc tr.fila-seleccionada,
+#resultadosPrestador tr.table-active,
+#resultadosObraSoc tr.table-active,
 #resultadosPrestador tr.rfp-res-activa,
-#resultadosObraSoc tr.rfp-res-activa { background: #bbdefb; }
+#resultadosObraSoc tr.rfp-res-activa {
+    background-color: #0d6efd !important;
+    color: #fff;
+    cursor: pointer;
+}
 .rfp-modal-tabla { font-size: .78rem; margin-bottom: 0; }
 .rfp-modal-tabla thead th {
     background: #1e293b;
@@ -440,9 +448,9 @@ require_once dirname(__FILE__) . '/views/layouts/header.php';
     }
 
     function rfpMarcarFila($tb, $row) {
-        $tb.find('tr').removeClass('rfp-res-activa');
+        $tb.find('tr').removeClass('rfp-res-activa table-active fila-seleccionada');
         if ($row && $row.length) {
-            $row.addClass('rfp-res-activa');
+            $row.addClass('rfp-res-activa table-active fila-seleccionada');
             if ($row[0] && $row[0].scrollIntoView) {
                 $row[0].scrollIntoView({ block: 'nearest' });
             }
@@ -454,17 +462,17 @@ require_once dirname(__FILE__) . '/views/layouts/header.php';
         if (!$rows.length) {
             return;
         }
-        var idx = $rows.index($rows.filter('.rfp-res-activa'));
+        var idx = $rows.index($rows.filter('.table-active, .rfp-res-activa, .fila-seleccionada').first());
         if (idx < 0) {
-            idx = 0;
+            idx = (dir > 0) ? 0 : $rows.length - 1;
         } else {
             idx += dir;
-        }
-        if (idx < 0) {
-            idx = 0;
-        }
-        if (idx >= $rows.length) {
-            idx = $rows.length - 1;
+            if (idx < 0) {
+                idx = $rows.length - 1;
+            }
+            if (idx >= $rows.length) {
+                idx = 0;
+            }
         }
         rfpMarcarFila($jq(tbodySel), $rows.eq(idx));
     }
@@ -545,8 +553,51 @@ require_once dirname(__FILE__) . '/views/layouts/header.php';
         if (key !== 38 && key !== 40 && key !== 13) {
             return;
         }
+        var tid = (e.target && e.target.id) ? e.target.id : '';
+        if (tid === 'rfp-q-prestador' || tid === 'rfp-q-obrasoc') {
+            return;
+        }
         rfpTeclasLista(e, ctx.tbody, ctx.btn);
     }, true);
+
+    $jq(document).on('keydown', '#modalBusquedaPrestador input[type="text"], #modalBusquedaObraSoc input[type="text"]', function (e) {
+        var $modal = $jq(this).closest('.modal');
+        var $filas = $modal.find('table tbody tr.rfp-res-prestador:visible, table tbody tr.rfp-res-obrasoc:visible');
+        var $tb = $modal.find('table tbody');
+
+        if (e.which === 40 || e.which === 38 || e.which === 13) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+        }
+
+        if (!$filas.length) {
+            if (e.which === 13) {
+                $modal.find('button.btn-primary').first().trigger('click');
+            }
+            return;
+        }
+
+        var $seleccionada = $filas.filter('.table-active, .rfp-res-activa, .fila-seleccionada').first();
+        var index = $filas.index($seleccionada);
+
+        if (e.which === 40) {
+            if (index === -1 || index === $filas.length - 1) {
+                rfpMarcarFila($tb, $filas.eq(0));
+            } else {
+                rfpMarcarFila($tb, $filas.eq(index + 1));
+            }
+        } else if (e.which === 38) {
+            if (index === -1 || index === 0) {
+                rfpMarcarFila($tb, $filas.eq($filas.length - 1));
+            } else {
+                rfpMarcarFila($tb, $filas.eq(index - 1));
+            }
+        } else if (e.which === 13) {
+            if ($seleccionada.length) {
+                $seleccionada.trigger('click');
+            }
+        }
+    });
 
     function rfpBuscarPrestadorModal(q) {
         $jq('#rfp-q-prestador').val(q || '');
@@ -657,9 +708,6 @@ require_once dirname(__FILE__) . '/views/layouts/header.php';
             rfpRenderPrestadores(res.resultados || res.data || []);
         });
     });
-    $jq('#rfp-q-prestador').on('keydown', function (e) {
-        rfpTeclasLista(e, '#resultadosPrestador', '#rfp-btn-q-prestador');
-    });
     $jq('#resultadosPrestador').on('mouseenter', 'tr.rfp-res-prestador', function () {
         rfpMarcarFila($jq('#resultadosPrestador'), $jq(this));
     });
@@ -668,9 +716,6 @@ require_once dirname(__FILE__) . '/views/layouts/header.php';
         rfpAjaxBusqueda('obrasoc', $jq.trim($jq('#rfp-q-obrasoc').val()), 'buscar', function (res) {
             rfpRenderObrasoc(res.resultados || []);
         });
-    });
-    $jq('#rfp-q-obrasoc').on('keydown', function (e) {
-        rfpTeclasLista(e, '#resultadosObraSoc', '#rfp-btn-q-obrasoc');
     });
     $jq('#resultadosObraSoc').on('mouseenter', 'tr.rfp-res-obrasoc', function () {
         rfpMarcarFila($jq('#resultadosObraSoc'), $jq(this));
