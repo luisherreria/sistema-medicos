@@ -616,7 +616,7 @@ $initials     = strtoupper(
 
                     <?php if (!empty($itemsTG)):
                         $subId = $catId . '-tg';
-                        $subActivo = ($routeActual === 'tablas-generales');
+                        $subActivo = ($routeActual === 'tablas-generales' || $routeActual === 'plantillas-emails');
                     ?>
                         <button type="button"
                                 class="menu-subgroup-hdr"

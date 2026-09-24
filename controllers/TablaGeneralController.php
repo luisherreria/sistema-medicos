@@ -342,6 +342,15 @@ class TablaGeneralController
                 'ruta'   => 'tablas-generales&ref=' . $ref,
             ];
         }
+
+        // ABM propio (no usa la tabla maestra `tablas`)
+        $out[] = [
+            'ref'    => 'CABECERA_MAILS',
+            'titulo' => 'Cabecera Mails',
+            'clave'  => 'MNU_ARC_TAB_CABECERA_MAILS',
+            'ruta'   => 'plantillas-emails',
+        ];
+
         return $out;
     }
 

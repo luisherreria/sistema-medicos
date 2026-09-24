@@ -370,6 +370,7 @@ class Permission
             'MNU_ARC_TAB_GRUPOCARTI'  => 'tablas-generales&ref=GRUPOCARTI',
             'MNU_ARC_TAB_GRUPONN'     => 'tablas-generales&ref=GRUPONN',
             'MNU_ARC_TAB_GRUPOSUP'    => 'tablas-generales&ref=GRUPOSUP',
+            'MNU_ARC_TAB_CABECERA_MAILS' => 'plantillas-emails',
             // ── CARGA DATOS ───────────────────────────────────────────────
             'MNU_CD_PREST_INGRESO'    => 'carga-prestaciones',
             'MNU_CD_PREST_MOD'        => 'mod-prestaciones',

@@ -42,6 +42,7 @@ require_once __DIR__ . '/controllers/RegistrfController.php';
 require_once __DIR__ . '/controllers/RegistrfPdfController.php';
 require_once __DIR__ . '/controllers/NomenclaController.php';
 require_once __DIR__ . '/controllers/TablaGeneralController.php';
+require_once __DIR__ . '/controllers/PlantillasEmailsController.php';
 
 // ── 5. Resolución de ruta ─────────────────────────────────────────────────
 $route  = trim($_GET['route'] ?? '');
@@ -203,6 +204,20 @@ switch ($route) {
             case 'guardar':  $controller->guardar();  break;
             case 'eliminar': $controller->eliminar(); break;
             case 'obtener':  $controller->obtener();  break;
+            default:         $controller->index();    break;
+        }
+        break;
+
+    // ── Cabecera Mails (Archivos → Tablas Generales → plantillas-emails) ──
+    case 'plantillas-emails':
+    case 'MNU_ARC_TAB_CABECERA_MAILS':
+        $controller = new PlantillasEmailsController();
+        $action     = trim($_GET['action'] ?? '');
+        switch ($action) {
+            case 'guardar':  $controller->guardar();  break;
+            case 'editar':   $controller->editar();   break;
+            case 'obtener':  $controller->obtener();  break;
+            case 'eliminar': $controller->eliminar(); break;
             default:         $controller->index();    break;
         }
         break;
