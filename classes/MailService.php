@@ -14,6 +14,9 @@ class MailService
     /** @var PDO */
     private $db;
 
+    /** @var string */
+    private $ultimoErrorDb = '';
+
     public function __construct(?PDO $db = null)
     {
         $this->db = $db instanceof PDO ? $db : Database::getConnection();
@@ -38,26 +41,31 @@ class MailService
         try {
             $plantilla = $this->obtenerPlantillaActiva($codigo_plantilla);
             if ($plantilla === null) {
+                $msg = 'MAIL ERROR: No se encontró la plantilla ' . $codigo_plantilla
+                    . ' o falló la SQL. Error DB: ' . $this->errorDb();
+                $this->trazar($msg);
                 $this->registrarLog(
                     $modulo_origen,
                     $codigo_plantilla,
                     '',
                     '',
                     'ERROR',
-                    'Plantilla inexistente o inactiva.'
+                    $msg
                 );
                 return false;
             }
 
             $smtp = $this->obtenerConfigSmtp();
             if ($smtp === null) {
+                $msg = 'MAIL ERROR: No se encontró t_config_smtp ID=1 o falló la SQL. Error DB: ' . $this->errorDb();
+                $this->trazar($msg);
                 $this->registrarLog(
                     $modulo_origen,
                     $codigo_plantilla,
                     '',
                     '',
                     'ERROR',
-                    'Configuración SMTP no encontrada (t_config_smtp ID=1).'
+                    $msg
                 );
                 return false;
             }
@@ -72,25 +80,31 @@ class MailService
             $destinatariosLog = implode(', ', array_merge($to, $cc, $cco));
 
             if ($to === []) {
+                $msg = 'MAIL ERROR: La plantilla ' . $codigo_plantilla
+                    . ' no tiene destinatarios válidos. Crudo: '
+                    . (string) ($plantilla['destinatarios'] ?? '');
+                $this->trazar($msg);
                 $this->registrarLog(
                     $modulo_origen,
                     $codigo_plantilla,
                     $destinatariosLog,
                     $asuntoLog,
                     'ERROR',
-                    'La plantilla no tiene destinatarios.'
+                    $msg
                 );
                 return false;
             }
 
             if (!$this->cargarPhpMailer()) {
+                $msg = 'MAIL ERROR: PHPMailer no está disponible (lib/PHPMailer o vendor).';
+                $this->trazar($msg);
                 $this->registrarLog(
                     $modulo_origen,
                     $codigo_plantilla,
                     $destinatariosLog,
                     $asuntoLog,
                     'ERROR',
-                    'PHPMailer no está disponible.'
+                    $msg
                 );
                 return false;
             }
@@ -138,6 +152,9 @@ class MailService
             );
             return true;
         } catch (\Throwable $e) {
+            $msg = 'MAIL ERROR: excepción en enviarCorreoTemplate(' . $codigo_plantilla . '): '
+                . $e->getMessage();
+            $this->trazar($msg);
             $this->registrarLog(
                 $modulo_origen,
                 $codigo_plantilla,
@@ -151,33 +168,76 @@ class MailService
     }
 
     /**
+     * Busca por código con SELECT * (sin filtrar activo/estado en SQL).
+     * Si existe columna activo/estado y está apagada, se descarta con log.
+     *
      * @return array<string, mixed>|null
      */
     private function obtenerPlantillaActiva(string $codigo)
     {
+        $this->ultimoErrorDb = '';
         if ($codigo === '') {
+            $this->ultimoErrorDb = 'código de plantilla vacío';
             return null;
         }
         try {
             $stmt = $this->db->prepare(
-                'SELECT codigo, asunto, cuerpo, destinatarios, cc, cco, activo
-                 FROM t_plantillas_emails
-                 WHERE codigo = :codigo
-                 LIMIT 1'
+                'SELECT * FROM t_plantillas_emails WHERE TRIM(codigo) = :codigo LIMIT 1'
             );
             $stmt->execute([':codigo' => $codigo]);
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
             if (!$row) {
+                $this->ultimoErrorDb = 'la consulta no devolvió filas para codigo=' . $codigo;
                 return null;
             }
-            $activo = $row['activo'] ?? 0;
-            if ((int) $activo !== 1 && strtoupper((string) $activo) !== 'S') {
+
+            $plantilla = $this->normalizarPlantilla($row);
+            if ($this->plantillaMarcadaInactiva($row)) {
+                $flag = $this->campo($row, array('activo', 'estado', 'activa'), '');
+                $this->ultimoErrorDb = 'plantilla encontrada pero inactiva (activo/estado=' . $flag . ')';
+                $this->trazar('MAIL ERROR: ' . $this->ultimoErrorDb . ' codigo=' . $codigo);
                 return null;
             }
-            return $row;
+            return $plantilla;
         } catch (\Throwable $e) {
+            $this->ultimoErrorDb = $this->errorDb($e);
+            $this->trazar('MAIL ERROR: SQL t_plantillas_emails falló. Error DB: ' . $this->ultimoErrorDb);
             return null;
         }
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function normalizarPlantilla(array $row)
+    {
+        return array(
+            'codigo'        => $this->campo($row, array('codigo', 'codigo_plantilla')),
+            'asunto'        => $this->campo($row, array('asunto', 'subject')),
+            'cuerpo'        => $this->campo($row, array('cuerpo', 'cuerpo_html', 'mensaje', 'body')),
+            'destinatarios' => $this->campo($row, array('destinatarios', 'destinatario', 'para', 'email_to')),
+            'cc'            => $this->campo($row, array('cc', 'copia')),
+            'cco'           => $this->campo($row, array('cco', 'bcc', 'cco_bcc')),
+        );
+    }
+
+    /**
+     * Solo si la tabla trae activo/estado. Si no existe la columna, se considera usable.
+     *
+     * @param array<string, mixed> $row
+     */
+    private function plantillaMarcadaInactiva(array $row): bool
+    {
+        if (!array_key_exists('activo', $row) && !array_key_exists('estado', $row) && !array_key_exists('activa', $row)) {
+            return false;
+        }
+        $flag = $this->campo($row, array('activo', 'estado', 'activa'), '');
+        if ($flag === '') {
+            return false;
+        }
+        $up = strtoupper($flag);
+        return ($up === 'N' || $up === 'NO' || $up === '0' || $up === 'INACTIVO' || $up === 'FALSE');
     }
 
     /**
@@ -185,6 +245,7 @@ class MailService
      */
     private function obtenerConfigSmtp()
     {
+        $this->ultimoErrorDb = '';
         try {
             $stmt = $this->db->prepare(
                 'SELECT host, puerto, usuario, `password`, remitente_email, remitente_nombre
@@ -195,6 +256,7 @@ class MailService
             $stmt->execute();
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
             if (!$row) {
+                $this->ultimoErrorDb = 't_config_smtp no tiene fila id=1';
                 return null;
             }
             return [
@@ -206,8 +268,48 @@ class MailService
                 'remitente_nombre' => trim((string) ($row['remitente_nombre'] ?? 'COMEDICA')),
             ];
         } catch (\Throwable $e) {
+            $this->ultimoErrorDb = $this->errorDb($e);
+            $this->trazar('MAIL ERROR: SQL t_config_smtp falló. Error DB: ' . $this->ultimoErrorDb);
             return null;
         }
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @param string[]             $claves
+     */
+    private function campo(array $row, array $claves, string $default = ''): string
+    {
+        foreach ($claves as $clave) {
+            if (array_key_exists($clave, $row) && $row[$clave] !== null && $row[$clave] !== '') {
+                return trim((string) $row[$clave]);
+            }
+        }
+        return $default;
+    }
+
+    private function errorDb(?\Throwable $e = null): string
+    {
+        $partes = array();
+        if ($this->ultimoErrorDb !== '') {
+            $partes[] = $this->ultimoErrorDb;
+        }
+        if ($e instanceof \Throwable) {
+            $partes[] = $e->getMessage();
+        }
+        $info = $this->db->errorInfo();
+        if (!empty($info[2])) {
+            $partes[] = $info[2];
+        } elseif (!empty($info[0]) && $info[0] !== '00000') {
+            $partes[] = 'SQLSTATE ' . $info[0];
+        }
+        return $partes ? implode(' | ', $partes) : 'sin detalle';
+    }
+
+    private function trazar(string $msg): void
+    {
+        error_log($msg);
+        @file_put_contents(dirname(__DIR__) . '/debug_mail.txt', $msg . "\n", FILE_APPEND);
     }
 
     /**
