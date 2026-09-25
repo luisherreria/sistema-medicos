@@ -256,6 +256,71 @@ function rfpPeriodoAamm($periodo)
     return '';
 }
 
+/**
+ * Convierte un importe con formato argentino (1.234.567,89) a float.
+ * Quita miles (.) y pasa la coma decimal a punto.
+ *
+ * @param mixed $valor
+ * @return float
+ */
+function rfpLimpiarImporte($valor)
+{
+    $s = trim(str_replace(array('$', ' '), '', (string) $valor));
+    if ($s === '') {
+        return 0.0;
+    }
+    if (strpos($s, ',') !== false) {
+        $s = str_replace('.', '', $s);
+        $s = str_replace(',', '.', $s);
+    } elseif (substr_count($s, '.') > 1) {
+        $s = str_replace('.', '', $s);
+    }
+    return (float) $s;
+}
+
+/**
+ * Importe OCR/PDF de la fila, siempre formateado (nunca value vacío).
+ *
+ * @param array $r
+ * @return string
+ */
+function rfpImporteMostrar($r)
+{
+    $r = is_array($r) ? $r : array();
+    $claves = array('TOTAL', 'COTOTALFAC', 'COIMPFAC', 'IMPORTE', 'importe');
+    $raw = '';
+    foreach ($claves as $k) {
+        if (isset($r[$k]) && $r[$k] !== null && $r[$k] !== '') {
+            $raw = $r[$k];
+            break;
+        }
+    }
+    return number_format(rfpLimpiarImporte($raw), 2, ',', '.');
+}
+
+/**
+ * Tope de carga desde t_control.valorreg.
+ *
+ * @param PDO $db
+ * @return float
+ */
+function rfpValorReg($db)
+{
+    try {
+        $stmt = $db->query('SELECT valorreg FROM t_control LIMIT 1');
+        $row  = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row && isset($row['valorreg'])) {
+            return rfpLimpiarImporte($row['valorreg']);
+        }
+    } catch (Exception $e) {
+        error_log('rfpValorReg: ' . $e->getMessage());
+    }
+    return 0.0;
+}
+
+/**
+ * Convierte AAMM → AA/MM (visualización).
+ */
 function rfpPeriodoDisplay($aamm)
 {
     $p = trim(isset($aamm) ? $aamm : '');
@@ -325,9 +390,7 @@ function rfpHtmlFilaPendiente($r)
     } else {
         $nroMostrar = $nro;
     }
-    $total = (isset($r['TOTAL']) && $r['TOTAL'] !== null && $r['TOTAL'] !== '')
-        ? number_format((float) $r['TOTAL'], 2, ',', '.')
-        : '';
+    $total = rfpImporteMostrar($r);
     $perDisp  = rfpPeriodoDisplay(isset($r['PERIODO']) ? $r['PERIODO'] : '');
     $chk      = (!empty($r['marcado'])) ? ' checked' : '';
     $prestOcr = isset($r['PRESTADOR']) ? $r['PRESTADOR'] : '';
@@ -346,7 +409,9 @@ function rfpHtmlFilaPendiente($r)
     $html .= '<td>' . rfpH($fec) . '</td>';
     $html .= '<td><input type="text" class="form-control form-control-sm rfp-inp inp-nro"';
     $html .= ' value="' . rfpH($nroMostrar) . '" placeholder="N° factura" maxlength="18"></td>';
-    $html .= '<td class="text-end" style="font-family:monospace;font-weight:600;">' . rfpH($total) . '</td>';
+    $html .= '<td><input type="text" name="importe[]" class="form-control form-control-sm rfp-inp inp-imp text-end"';
+    $html .= ' value="' . rfpH($total) . '" data-importe="' . rfpH($total) . '"';
+    $html .= ' placeholder="0,00" maxlength="18"></td>';
     $html .= '<td><input type="text" class="form-control form-control-sm rfp-inp inp-os edit-obrasoc"';
     $html .= ' value="' . rfpH($os) . '" placeholder="Código / nombre" maxlength="40"></td>';
     $html .= '<td><input type="text" class="form-control form-control-sm rfp-inp inp-per edit-periodo validar-periodo"';

@@ -769,29 +769,33 @@ require_once dirname(__FILE__) . '/views/layouts/header.php';
             alert('Seleccioná al menos una factura para borrar.');
             return;
         }
-        if (!confirm('¿Eliminar las ' + ids.length + ' factura(s) seleccionada(s) de la previsualización?')) {
-            return;
-        }
-        var fd = new FormData();
-        fd.append('csrf_token', CSRF);
-        fd.append('accion', 'eliminar');
-        $jq.each(ids, function (i, id) {
-            fd.append('ids[' + i + ']', id);
-        });
-        fetch('acciones_masivas.php', {
-            method: 'POST',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            body: fd
-        })
-            .then(function (r) { return r.json(); })
-            .then(function (res) {
-                if (!res.ok) {
-                    alert(res.error || 'No se pudo eliminar.');
-                    return;
-                }
-                window.location.reload();
-            })
-            .catch(function () { alert('Error de comunicación al eliminar.'); });
+        window.confirmarAccion(
+            '¿Eliminar registros?',
+            '¿Eliminar las ' + ids.length + ' factura(s) seleccionada(s) de la previsualización?',
+            'Sí, eliminar',
+            function () {
+                var fd = new FormData();
+                fd.append('csrf_token', CSRF);
+                fd.append('accion', 'eliminar');
+                $jq.each(ids, function (i, id) {
+                    fd.append('ids[' + i + ']', id);
+                });
+                fetch('acciones_masivas.php', {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: fd
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (res) {
+                        if (!res.ok) {
+                            alert(res.error || 'No se pudo eliminar.');
+                            return;
+                        }
+                        window.location.reload();
+                    })
+                    .catch(function () { alert('Error de comunicación al eliminar.'); });
+            }
+        );
     });
 
     $jq('#rfp-btn-confirmar').on('click', function () {
@@ -802,6 +806,7 @@ require_once dirname(__FILE__) . '/views/layouts/header.php';
             var $tr  = $jq(this).closest('tr');
             var $cod = $tr.find('.inp-cod');
             var $nro = $tr.find('.inp-nro');
+            var $imp = $tr.find('.inp-imp');
             var $os  = $tr.find('.inp-os');
             var $per = $tr.find('.inp-per');
 
@@ -821,10 +826,16 @@ require_once dirname(__FILE__) . '/views/layouts/header.php';
                 return;
             }
 
+            var importe = $imp.length ? $jq.trim($imp.val()) : '';
+            if (importe === '' && $imp.length) {
+                importe = $jq.trim($imp.attr('data-importe') || '');
+            }
+
             filasOk.push({
                 id: this.value,
                 COD_PREST: $jq.trim($cod.val()),
                 NRO_FACTURA: $jq.trim($nro.val()),
+                IMPORTE: importe,
                 O_SOCIAL: $jq.trim($os.val()),
                 PERIODO: $jq.trim($per.val())
             });
@@ -840,57 +851,97 @@ require_once dirname(__FILE__) . '/views/layouts/header.php';
             return;
         }
 
-        var fd = new FormData();
-        fd.append('csrf_token', CSRF);
-        fd.append('accion', 'confirmar');
-        $jq.each(filasOk, function (i, f) {
-            fd.append('filas[' + i + '][id]', f.id);
-            fd.append('filas[' + i + '][COD_PREST]', f.COD_PREST);
-            fd.append('filas[' + i + '][NRO_FACTURA]', f.NRO_FACTURA);
-            fd.append('filas[' + i + '][O_SOCIAL]', f.O_SOCIAL);
-            fd.append('filas[' + i + '][PERIODO]', f.PERIODO);
-        });
+        Swal.fire({
+            title: '¿Confirmar facturas?',
+            text: '¿Estás seguro de que deseas procesar y enviar las ' + filasOk.length + ' factura(s) seleccionada(s)?',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#198754',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, enviar facturas',
+            cancelButtonText: 'Revisar de nuevo'
+        }).then(function (result) {
+            if (!result.isConfirmed) {
+                return;
+            }
 
-        fetch('acciones_masivas.php', {
-            method: 'POST',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            body: fd
-        })
-            .then(function (r) { return r.json(); })
-            .then(function (res) {
-                if (!res.ok) {
-                    alert(res.error || 'No se pudo confirmar.');
-                    return;
-                }
-                alert(res.msg || ('Se confirmaron ' + res.confirmadas + ' factura(s).'));
-                window.location.reload();
-            })
-            .catch(function () {
-                alert('Error de comunicación al confirmar.');
+            var fd = new FormData();
+            fd.append('csrf_token', CSRF);
+            fd.append('accion', 'confirmar');
+            $jq.each(filasOk, function (i, f) {
+                fd.append('filas[' + i + '][id]', f.id);
+                fd.append('filas[' + i + '][COD_PREST]', f.COD_PREST);
+                fd.append('filas[' + i + '][NRO_FACTURA]', f.NRO_FACTURA);
+                fd.append('filas[' + i + '][IMPORTE]', f.IMPORTE);
+                fd.append('importe[]', f.IMPORTE);
+                fd.append('filas[' + i + '][O_SOCIAL]', f.O_SOCIAL);
+                fd.append('filas[' + i + '][PERIODO]', f.PERIODO);
             });
+
+            fetch('acciones_masivas.php', {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: fd
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (!res || res.ok === false || res.status === 'error') {
+                        var msg = (res && (res.error || res.message)) ? (res.error || res.message) : 'No se pudo confirmar.';
+                        var titulo = (String(msg).indexOf('ya se encuentra registrada') !== -1)
+                            ? 'Factura Duplicada'
+                            : 'Error';
+                        Swal.fire({
+                            icon: 'error',
+                            title: titulo,
+                            text: msg,
+                            confirmButtonColor: '#0d6efd'
+                        });
+                        return;
+                    }
+                    alert(res.msg || ('Se confirmaron ' + res.confirmadas + ' factura(s).'));
+                    window.location.reload();
+                })
+                .catch(function () {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Error de comunicación al confirmar.',
+                        confirmButtonColor: '#0d6efd'
+                    });
+                });
+        });
     });
 
     $jq(document).on('click', '#tabla-facturas .rfp-btn-del', function () {
         var id = this.getAttribute('data-id');
-        if (!id || !confirm('¿Eliminar esta factura de la previsualización?')) return;
-        var fd = new FormData();
-        fd.append('csrf_token', CSRF);
-        fd.append('accion', 'eliminar');
-        fd.append('id', id);
-        fetch('acciones_masivas.php', {
-            method: 'POST',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            body: fd
-        })
-            .then(function (r) { return r.json(); })
-            .then(function (res) {
-                if (!res.ok) {
-                    alert(res.error || 'No se pudo eliminar.');
-                    return;
-                }
-                window.location.reload();
-            })
-            .catch(function () { alert('Error de comunicación al eliminar.'); });
+        if (!id) {
+            return;
+        }
+        window.confirmarAccion(
+            '¿Eliminar registro?',
+            '¿Eliminar esta factura de la previsualización?',
+            'Sí, eliminar',
+            function () {
+                var fd = new FormData();
+                fd.append('csrf_token', CSRF);
+                fd.append('accion', 'eliminar');
+                fd.append('id', id);
+                fetch('acciones_masivas.php', {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: fd
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (res) {
+                        if (!res.ok) {
+                            alert(res.error || 'No se pudo eliminar.');
+                            return;
+                        }
+                        window.location.reload();
+                    })
+                    .catch(function () { alert('Error de comunicación al eliminar.'); });
+            }
+        );
     });
 })();
 </script>

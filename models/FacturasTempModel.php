@@ -171,7 +171,8 @@ class FacturasTempModel
                        COFECFAC          AS F_FACTURA,
                        TRIM(COSUCFAC)    AS SUCURSAL,
                        TRIM(CONROFAC)    AS NRO_FACTURA,
-                       COTOTALFAC        AS TOTAL,
+                       GREATEST(COALESCE(COTOTALFAC, 0), COALESCE(COIMPFAC, 0)) AS TOTAL,
+                       COIMPFAC          AS IMPORTE,
                        TRIM(COOBRASOC)   AS O_SOCIAL,
                        TRIM(COPERIODO)   AS PERIODO,
                        TRIM(COUSUARIO)   AS USUARIO,
@@ -197,7 +198,8 @@ class FacturasTempModel
                        COFECFAC          AS F_FACTURA,
                        TRIM(COSUCFAC)    AS SUCURSAL,
                        TRIM(CONROFAC)    AS NRO_FACTURA,
-                       COTOTALFAC        AS TOTAL,
+                       GREATEST(COALESCE(COTOTALFAC, 0), COALESCE(COIMPFAC, 0)) AS TOTAL,
+                       COIMPFAC          AS IMPORTE,
                        TRIM(COOBRASOC)   AS O_SOCIAL,
                        TRIM(COPERIODO)   AS PERIODO,
                        TRIM(COUSUARIO)   AS USUARIO,
@@ -215,7 +217,7 @@ class FacturasTempModel
 
     /**
      * @param int   $id
-     * @param array $campos  COD_PREST, NRO_FACTURA, O_SOCIAL, PERIODO, SUCURSAL
+     * @param array $campos  COD_PREST, NRO_FACTURA, O_SOCIAL, PERIODO, SUCURSAL, IMPORTE
      */
     public function actualizarFila($id, $campos)
     {
@@ -226,9 +228,12 @@ class FacturasTempModel
                     COOBRASOC  = :os,
                     CONOMOBRA  = :nomos,
                     COPERIODO  = :per,
+                    COIMPFAC   = :imp,
+                    COTOTALFAC = :tot,
                     marcado    = 1
                 WHERE id = :id";
         $stmt = $this->db->prepare($sql);
+        $imp = isset($campos['IMPORTE']) ? (float) $campos['IMPORTE'] : 0;
         $stmt->execute(array(
             ':cod'   => isset($campos['COD_PREST']) ? $campos['COD_PREST'] : '',
             ':nro'   => isset($campos['NRO_FACTURA']) ? $campos['NRO_FACTURA'] : '',
@@ -236,6 +241,8 @@ class FacturasTempModel
             ':os'    => isset($campos['O_SOCIAL']) ? $campos['O_SOCIAL'] : '',
             ':nomos' => isset($campos['CONOMOBRA']) ? $campos['CONOMOBRA'] : '',
             ':per'   => isset($campos['PERIODO']) ? $campos['PERIODO'] : '',
+            ':imp'   => $imp,
+            ':tot'   => $imp,
             ':id'    => (int) $id,
         ));
     }

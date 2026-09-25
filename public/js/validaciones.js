@@ -24,6 +24,30 @@ if (typeof window !== 'undefined') {
         }
     };
 }
+
+// Premisa del sistema: Wrapper global para confirmaciones con SweetAlert2
+window.confirmarAccion = function (titulo, mensaje, textoBoton, callbackAceptar) {
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: titulo || '¿Estás seguro?',
+            text: mensaje,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: textoBoton || 'Sí, continuar',
+            cancelButtonText: 'Cancelar'
+        }).then(function (result) {
+            if (result.isConfirmed && typeof callbackAceptar === 'function') {
+                callbackAceptar();
+            }
+        });
+    } else if (window.confirm(mensaje)) {
+        if (typeof callbackAceptar === 'function') {
+            callbackAceptar();
+        }
+    }
+};
 (function ($) {
     if (typeof $ === 'undefined') {
         return;

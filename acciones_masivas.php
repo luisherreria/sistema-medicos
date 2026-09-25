@@ -8,6 +8,9 @@
 
 require_once dirname(__FILE__) . '/includes/facturas_pdf_common.php';
 require_once dirname(__FILE__) . '/models/FacturasTempModel.php';
+if (is_file(dirname(__FILE__) . '/classes/MailService.php')) {
+    require_once dirname(__FILE__) . '/classes/MailService.php';
+}
 
 rfpRequireAuth();
 rfpRequirePermiso();
@@ -46,6 +49,8 @@ try {
     }
 
     $db->beginTransaction();
+    $valorreg = rfpValorReg($db);
+    $mailService = class_exists('MailService') ? new MailService($db) : null;
 
     try {
         foreach ($filas as $fila) {
@@ -61,6 +66,23 @@ try {
             $nro = isset($fila['NRO_FACTURA']) ? trim($fila['NRO_FACTURA']) : '';
             $os  = isset($fila['O_SOCIAL']) ? trim($fila['O_SOCIAL']) : '';
             $per = isset($fila['PERIODO']) ? trim($fila['PERIODO']) : '';
+            $importeRaw = rfpImportePost($fila);
+            $importe_limpio = rfpLimpiarImporte($importeRaw);
+            if ($importe_limpio <= 0) {
+                $existente = $model->obtenerPorId($id);
+                if ($existente) {
+                    $importe_limpio = rfpLimpiarImporte(rfpImporteMostrar($existente));
+                }
+            }
+            $importe = $importeRaw;
+            file_put_contents(
+                __DIR__ . '/debug_mail.txt',
+                "--- LLEGO AL LOOP id={$id} " . date('Y-m-d H:i:s') . " ---\n"
+                . "Importe Original recibido: " . (isset($importe) ? $importe : 'N/A') . "\n"
+                . "Importe Limpio float: " . $importe_limpio . "\n"
+                . "Tope Valorreg: " . (isset($valorreg) ? $valorreg : 'NO DEFINIDO') . "\n",
+                FILE_APPEND
+            );
 
             $suc = '';
             if (preg_match('/^(\d{1,5})\s*[\-–]\s*(\d+)$/', $nro, $m)) {
@@ -74,6 +96,18 @@ try {
             $osRes = rfpResolverOs($db, $os);
             $prRes = rfpResolverPrestadorCodigo($db, $cod);
 
+            $codFinal = $prRes['codigo'] !== '' ? $prRes['codigo'] : $cod;
+            $osFinal  = $osRes['codigo'] !== '' ? $osRes['codigo'] : $os;
+            $dup = rfpFacturaHistorica($db, $codFinal, $osFinal, $suc, $nro);
+            if ($dup) {
+                $nroMostrar = ($suc !== '' ? $suc . '-' : '') . $nro;
+                throw new Exception(
+                    'La factura ' . $nroMostrar
+                    . ' ya se encuentra registrada históricamente en el período '
+                    . rfpPeriodoDisplay($dup) . '. No puede continuar cargando esta factura.'
+                );
+            }
+
             $model->actualizarFila($id, array(
                 'COD_PREST'   => $prRes['codigo'] !== '' ? $prRes['codigo'] : $cod,
                 'NRO_FACTURA' => $nro,
@@ -81,7 +115,37 @@ try {
                 'O_SOCIAL'    => $osRes['codigo'] !== '' ? $osRes['codigo'] : $os,
                 'CONOMOBRA'   => $osRes['nombre'],
                 'PERIODO'     => $periodoAamm,
+                'IMPORTE'     => $importe_limpio,
             ));
+
+            $importe = $importeRaw;
+            $nroMostrar = ($suc !== '' ? $suc . '-' : '') . $nro;
+            $datos_reemplazo = array(
+                '{tope}'        => number_format((float) $valorreg, 2, ',', '.'),
+                '{obra_social}' => $osRes['nombre'] !== '' ? $osRes['nombre'] : $osFinal,
+                '{fecha}'       => date('d/m/Y'),
+                '{prestador}'   => $prRes['nombre'] !== '' ? $prRes['nombre'] : $codFinal,
+                '{nro_factura}' => $nroMostrar,
+                '{importe}'     => number_format((float) $importe_limpio, 2, ',', '.'),
+            );
+
+            $debugFile = __DIR__ . '/debug_mail.txt';
+            $debugMsg = "--- INTENTO DE CARGA: " . date('Y-m-d H:i:s') . " ---\n";
+            $debugMsg .= "Importe Original recibido: " . (isset($importe) ? $importe : 'N/A') . "\n";
+            $debugMsg .= "Importe Limpio float: " . $importe_limpio . "\n";
+            $debugMsg .= "Tope Valorreg: " . (isset($valorreg) ? $valorreg : 'NO DEFINIDO') . "\n";
+            $debugMsg .= "Resultado del IF (>): " . ($importe_limpio > $valorreg ? 'VERDADERO' : 'FALSO') . "\n";
+            file_put_contents($debugFile, $debugMsg, FILE_APPEND);
+
+            if ($importe_limpio > $valorreg) {
+                file_put_contents($debugFile, "--> Entró al bloque de MailService\n", FILE_APPEND);
+
+                $res = false;
+                if ($mailService) {
+                    $res = $mailService->enviarCorreoTemplate('ALERTA_FACTURA_ALTA', $datos_reemplazo, 'Registración');
+                }
+                file_put_contents($debugFile, "--> Retorno MailService: " . ($res ? 'EXITO' : 'FALLO (revisar si la plantilla ALERTA_FACTURA_ALTA existe y está activa)') . "\n", FILE_APPEND);
+            }
 
             if ($prRes['nombre'] !== '') {
                 $up = $db->prepare('UPDATE t_facturas_temp SET CONOMPREST = :n, COCATEG = :c WHERE id = :id');
@@ -98,6 +162,7 @@ try {
         $borradas = $model->borrarMarcadas();
 
         $db->commit();
+
         rfpJsonOk(array(
             'confirmadas' => (int) $borradas,
             'msg'         => 'Facturas confirmadas y pasadas al registro oficial.',
@@ -112,6 +177,92 @@ try {
     rfpJsonError('Error de base de datos: ' . $e->getMessage());
 } catch (Exception $e) {
     rfpJsonError($e->getMessage());
+}
+
+/**
+ * Importe enviado al confirmar (input de grilla o alias).
+ *
+ * @param array $fila
+ * @return string
+ */
+function rfpImportePost($fila)
+{
+    if (!is_array($fila)) {
+        return '';
+    }
+    if (isset($fila['IMPORTE']) && trim((string) $fila['IMPORTE']) !== '') {
+        return $fila['IMPORTE'];
+    }
+    if (isset($fila['importe']) && trim((string) $fila['importe']) !== '') {
+        return $fila['importe'];
+    }
+    return '';
+}
+
+/**
+ * Dispara MailService por cada factura que superó valorreg.
+ * Nunca interrumpe la confirmación.
+ *
+ * @param PDO   $db
+ * @param array $alertas
+ */
+function rfpEnviarAlertasTope($db, $alertas)
+{
+    try {
+        $mailFile = dirname(__FILE__) . '/classes/MailService.php';
+        if (!class_exists('MailService') && is_file($mailFile)) {
+            require_once $mailFile;
+        }
+        if (!class_exists('MailService')) {
+            return;
+        }
+        $mailer = new MailService($db);
+        foreach ($alertas as $datos) {
+            $mailer->enviarCorreoTemplate('ALERTA_FACTURA_ALTA', $datos, 'REGISTRF');
+        }
+    } catch (Exception $e) {
+        error_log('rfpEnviarAlertasTope: ' . $e->getMessage());
+    }
+}
+
+/**
+ * Busca en registrf la misma factura (prestador + OS + sucursal + nro),
+ * sin importar el período. Devuelve COPERIODO o false.
+ *
+ * @param PDO    $db
+ * @param string $prestador
+ * @param string $obrasocial
+ * @param string $sucursal
+ * @param string $nroFactura
+ * @return string|false
+ */
+function rfpFacturaHistorica($db, $prestador, $obrasocial, $sucursal, $nroFactura)
+{
+    $nroComp = ($sucursal !== '' && $nroFactura !== '' && strpos($nroFactura, '-') === false)
+        ? ($sucursal . '-' . $nroFactura)
+        : $nroFactura;
+
+    $stmt = $db->prepare(
+        "SELECT TRIM(COPERIODO) AS periodo
+         FROM registrf
+         WHERE TRIM(COPRESTADO) = :prestador
+           AND TRIM(COOBRASOC)  = :obrasocial
+           AND TRIM(COSUCFAC)   = :sucursal
+           AND (TRIM(CONROFAC) = :nro OR TRIM(CONROFAC) = :nrocomp)
+         LIMIT 1"
+    );
+    $stmt->execute(array(
+        ':prestador'  => trim($prestador),
+        ':obrasocial' => trim($obrasocial),
+        ':sucursal'   => trim($sucursal),
+        ':nro'        => trim($nroFactura),
+        ':nrocomp'    => trim($nroComp),
+    ));
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($row && isset($row['periodo']) && $row['periodo'] !== '') {
+        return $row['periodo'];
+    }
+    return false;
 }
 
 /**
