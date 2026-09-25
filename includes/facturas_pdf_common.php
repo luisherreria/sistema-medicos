@@ -411,7 +411,7 @@ function rfpHtmlFilaPendiente($r)
     $html .= ' value="' . rfpH($nroMostrar) . '" placeholder="N° factura" maxlength="18"></td>';
     $html .= '<td><input type="text" name="importe[]" class="form-control form-control-sm rfp-inp inp-imp text-end"';
     $html .= ' value="' . rfpH($total) . '" data-importe="' . rfpH($total) . '"';
-    $html .= ' placeholder="0,00" maxlength="18"></td>';
+    $html .= ' placeholder="0,00" maxlength="22" onblur="formatearImporteVisual(this)"></td>';
     $html .= '<td><input type="text" class="form-control form-control-sm rfp-inp inp-os edit-obrasoc"';
     $html .= ' value="' . rfpH($os) . '" placeholder="Código / nombre" maxlength="40"></td>';
     $html .= '<td><input type="text" class="form-control form-control-sm rfp-inp inp-per edit-periodo validar-periodo"';

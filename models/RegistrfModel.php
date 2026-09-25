@@ -132,7 +132,10 @@ class RegistrfModel
                     " . ($this->tieneColumna('COFECFAC') ? $this->col('COFECFAC') : 'NULL') . " AS COFECFAC,
                     " . ($this->tieneColumna('COTOTALFAC') ? $this->col('COTOTALFAC') : 'NULL') . " AS COTOTALFAC,
                     TRIM({$this->col('COUSUARIO')})  AS COUSUARIO,
-                    {$fecCarga} AS COFECCARGA
+                    {$fecCarga} AS COFECCARGA,
+                    " . ($this->tieneColumna('archivo_pdf')
+                        ? "TRIM({$this->col('archivo_pdf')}) AS archivo_pdf"
+                        : "NULL AS archivo_pdf") . "
                 FROM registrf
                 {$where}
                 ORDER BY {$orderExpr}

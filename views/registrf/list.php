@@ -117,11 +117,12 @@ tailwind.config = { corePlugins: { preflight: false } };
             <th class="rf-th sortable" data-col="COTOTALFAC"  style="width:110px;text-align:right;">TOTAL <span class="rf-sort-icon">⇅</span></th>
             <th class="rf-th sortable" data-col="COUSUARIO"   style="width:80px;">USUARIO <span class="rf-sort-icon">⇅</span></th>
             <th class="rf-th sortable" data-col="COFECCARGA"  style="width:110px;">F. CARGA <span class="rf-sort-icon">⇅</span></th>
+            <th class="rf-th" style="width:52px;text-align:center;">PDF</th>
         </tr>
         </thead>
         <tbody id="rf-tbody">
         <tr>
-            <td colspan="10" class="text-center py-4 text-muted" style="font-size:.82rem;">
+            <td colspan="11" class="text-center py-4 text-muted" style="font-size:.82rem;">
                 <span class="spinner-border spinner-border-sm me-2"></span>Cargando…
             </td>
         </tr>
@@ -225,7 +226,7 @@ tailwind.config = { corePlugins: { preflight: false } };
         state.cargando = true;
         state.pagina   = pagina || state.pagina;
 
-        $tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-muted" style="font-size:.82rem;">'
+        $tbody.innerHTML = '<tr><td colspan="11" class="text-center py-4 text-muted" style="font-size:.82rem;">'
             + '<span class="spinner-border spinner-border-sm me-2"></span>Cargando…</td></tr>';
 
         var url = 'index.php?route=' + ROUTE + '&action=listado'
@@ -240,7 +241,7 @@ tailwind.config = { corePlugins: { preflight: false } };
             .then(function (res) {
                 state.cargando = false;
                 if (!res.ok) {
-                    $tbody.innerHTML = '<tr><td colspan="10" class="text-center text-danger py-3" style="font-size:.82rem;">'
+                    $tbody.innerHTML = '<tr><td colspan="11" class="text-center text-danger py-3" style="font-size:.82rem;">'
                         + '<i class="fa-solid fa-triangle-exclamation me-1"></i>'
                         + esc(res.error || 'Error al cargar datos.') + '</td></tr>';
                     return;
@@ -252,7 +253,7 @@ tailwind.config = { corePlugins: { preflight: false } };
             })
             .catch(function (err) {
                 state.cargando = false;
-                $tbody.innerHTML = '<tr><td colspan="10" class="text-center text-danger py-3" style="font-size:.82rem;">'
+                $tbody.innerHTML = '<tr><td colspan="11" class="text-center text-danger py-3" style="font-size:.82rem;">'
                     + 'Error de comunicación con el servidor.</td></tr>';
             });
     }
@@ -263,7 +264,7 @@ tailwind.config = { corePlugins: { preflight: false } };
     // ══════════════════════════════════════════════════════════════════════
     function renderTabla(datos) {
         if (!datos || !datos.length) {
-            $tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4" style="font-size:.82rem;">'
+            $tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted py-4" style="font-size:.82rem;">'
                 + '<i class="fa-solid fa-inbox me-2"></i>No se encontraron facturas.</td></tr>';
             return;
         }
@@ -290,6 +291,14 @@ tailwind.config = { corePlugins: { preflight: false } };
                 ? '$ ' + parseFloat(r.COTOTALFAC).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                 : '—';
 
+            var pdfNom = String(r.archivo_pdf || r.ARCHIVO_PDF || '').trim();
+            var pdfCell = '—';
+            if (pdfNom !== '') {
+                var pdfHref = 'public/uploads/facturas_pdf/' + encodeURIComponent(pdfNom);
+                pdfCell = '<a href="' + pdfHref + '" target="_blank" title="Ver PDF" rel="noopener">'
+                    + '<i class="fa-solid fa-file-pdf text-danger"></i></a>';
+            }
+
             html += '<tr>'
                 + '<td><span style="font-family:monospace;font-weight:600;font-size:.78rem;">' + esc(perDisplay) + '</span></td>'
                 + '<td><span class="badge-os">' + esc(r.COOBRASOC || '') + '</span></td>'
@@ -300,6 +309,7 @@ tailwind.config = { corePlugins: { preflight: false } };
                 + '<td class="td-total">' + esc(total) + '</td>'
                 + '<td style="font-size:.73rem;color:#64748b;">' + esc(r.COUSUARIO || '') + '</td>'
                 + '<td class="td-fecha">' + fecCarga + '</td>'
+                + '<td style="text-align:center;">' + pdfCell + '</td>'
                 + '</tr>';
         });
         $tbody.innerHTML = html;

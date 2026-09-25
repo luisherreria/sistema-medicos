@@ -267,6 +267,41 @@ require_once dirname(__FILE__) . '/views/layouts/header.php';
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.9.3/dropzone.min.js"></script>
 <script>
+function formatearImporteVisual(el) {
+    if (!el) {
+        return;
+    }
+    var raw = String(el.value || '').replace(/\$/g, '').replace(/\s/g, '').trim();
+    if (raw === '') {
+        return;
+    }
+    var n;
+    if (raw.indexOf(',') !== -1) {
+        n = parseFloat(raw.replace(/\./g, '').replace(',', '.'));
+    } else if ((raw.match(/\./g) || []).length > 1) {
+        n = parseFloat(raw.replace(/\./g, ''));
+    } else {
+        n = parseFloat(raw);
+    }
+    if (isNaN(n)) {
+        return;
+    }
+    var fmt;
+    if (typeof Intl !== 'undefined' && Intl.NumberFormat) {
+        fmt = new Intl.NumberFormat('es-AR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(n);
+    } else {
+        var parts = n.toFixed(2).split('.');
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        fmt = parts[0] + ',' + parts[1];
+    }
+    el.value = fmt;
+    el.setAttribute('data-importe', fmt);
+}
+window.formatearImporteVisual = formatearImporteVisual;
+
 (function () {
     'use strict';
     if (typeof jQuery === 'undefined' || typeof jQuery.fn.DataTable === 'undefined') return;
@@ -619,6 +654,10 @@ require_once dirname(__FILE__) . '/views/layouts/header.php';
 
     $jq(document).on('input', '.edit-codprest, .edit-obrasoc', function () {
         $jq(this).val($jq(this).val().toUpperCase());
+    });
+
+    $jq(document).on('blur', '#tabla-facturas .inp-imp', function () {
+        formatearImporteVisual(this);
     });
 
     $jq(document).on('keydown', '#tabla-facturas .edit-codprest', function (e) {

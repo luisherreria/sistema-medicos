@@ -142,18 +142,27 @@ class MailService
 
             $mail->send();
 
+            $okServidor = 'ÉXITO: Correo despachado correctamente por SMTP';
+            if (!empty($mail->ErrorInfo)) {
+                $okServidor .= ' — ' . $mail->ErrorInfo;
+            }
+
             $this->registrarLog(
                 $modulo_origen,
                 $codigo_plantilla,
                 $destinatariosLog,
                 $asuntoLog,
                 'ENVIADO',
-                ''
+                $okServidor
             );
             return true;
         } catch (\Throwable $e) {
+            $errServidor = $e->getMessage();
+            if (isset($mail) && is_object($mail) && !empty($mail->ErrorInfo)) {
+                $errServidor = $mail->ErrorInfo;
+            }
             $msg = 'MAIL ERROR: excepción en enviarCorreoTemplate(' . $codigo_plantilla . '): '
-                . $e->getMessage();
+                . $errServidor;
             $this->trazar($msg);
             $this->registrarLog(
                 $modulo_origen,
@@ -161,7 +170,7 @@ class MailService
                 $destinatariosLog,
                 $asuntoLog,
                 'ERROR',
-                $e->getMessage()
+                $errServidor
             );
             return false;
         }
@@ -389,21 +398,27 @@ class MailService
         try {
             $stmt = $this->db->prepare(
                 'INSERT INTO t_log_emails
-                    (fecha, modulo, codigo_plantilla, destinatarios, asunto, estado, mensaje_servidor)
+                    (fecha, modulo_origen, codigo_plantilla, destinatarios, asunto, estado, mensaje_servidor)
                  VALUES
-                    (:fecha, :modulo, :codigo_plantilla, :destinatarios, :asunto, :estado, :mensaje_servidor)'
+                    (:fecha, :modulo_origen, :codigo_plantilla, :destinatarios, :asunto, :estado, :mensaje_servidor)'
             );
             $stmt->execute([
                 ':fecha'            => date('Y-m-d H:i:s'),
-                ':modulo'           => substr($modulo, 0, 80),
-                ':codigo_plantilla' => substr($codigoPlantilla, 0, 80),
+                ':modulo_origen'    => substr($modulo, 0, 100),
+                ':codigo_plantilla' => substr($codigoPlantilla, 0, 50),
                 ':destinatarios'    => $destinatarios,
-                ':asunto'           => $asunto,
+                ':asunto'           => substr($asunto, 0, 255),
                 ':estado'           => $estado === 'ENVIADO' ? 'ENVIADO' : 'ERROR',
                 ':mensaje_servidor' => $mensajeServidor,
             ]);
         } catch (\Throwable $e) {
-            error_log('MailService::registrarLog — ' . $e->getMessage());
+            $err = $this->errorDb($e);
+            $this->trazar('ERROR SQL EN LOG: ' . $err);
+            @file_put_contents(
+                dirname(__DIR__) . '/debug_mail.txt',
+                'ERROR SQL EN LOG: ' . $err . "\n",
+                FILE_APPEND
+            );
         }
     }
 }

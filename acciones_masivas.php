@@ -121,12 +121,13 @@ try {
             $importe = $importeRaw;
             $nroMostrar = ($suc !== '' ? $suc . '-' : '') . $nro;
             $datos_reemplazo = array(
-                '{tope}'        => number_format((float) $valorreg, 2, ',', '.'),
-                '{obra_social}' => $osRes['nombre'] !== '' ? $osRes['nombre'] : $osFinal,
-                '{fecha}'       => date('d/m/Y'),
-                '{prestador}'   => $prRes['nombre'] !== '' ? $prRes['nombre'] : $codFinal,
-                '{nro_factura}' => $nroMostrar,
-                '{importe}'     => number_format((float) $importe_limpio, 2, ',', '.'),
+                '{tope}'               => number_format((float) $valorreg, 2, ',', '.'),
+                '{obra_social_nombre}' => $osRes['nombre'] !== '' ? $osRes['nombre'] : $os,
+                '{obra_social_codigo}' => $osFinal,
+                '{fecha}'              => date('d/m/Y'),
+                '{prestador}'          => $prRes['nombre'] !== '' ? $prRes['nombre'] : $codFinal,
+                '{nro_factura}'        => $nroMostrar,
+                '{importe}'            => number_format((float) $importe_limpio, 2, ',', '.'),
             );
 
             $debugFile = __DIR__ . '/debug_mail.txt';
