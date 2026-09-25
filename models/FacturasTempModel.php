@@ -19,7 +19,8 @@ class FacturasTempModel
 
     /**
      * Inserta una factura extraída del PDF.
-     * COD_PREST (COPRESTADO) y O_SOCIAL (COOBRASOC) van vacíos.
+     * COPRESTADO se completa si el OCR matcheó CUIT en ebamp.
+     * O_SOCIAL (COOBRASOC) va vacío.
      * PERIODO (COPERIODO) llega en AA/MM si el OCR lo detectó.
      *
      * @param array $datos
@@ -38,13 +39,14 @@ class FacturasTempModel
                      CODISKETTE, COFACTURA, TPFACT, `user`,
                      archivo_pdf, marcado, texto_ocr)
                 VALUES
-                    (:cofecha, :coperiodo, '', '', :conomprest,
+                    (:cofecha, :coperiodo, '', :coprestado, :conomprest,
                      :cosucfac, :conrofac, :cofecfac, :coimpfac, :cototalfac,
                      :cofeccarga, '', :cousuario, 1, 1,
                      0, 'SI', 'FISICA', :userlargo,
                      :archivo_pdf, 0, :texto_ocr)";
 
         $prest   = isset($datos['prestador']) ? $datos['prestador'] : '';
+        $codPr   = isset($datos['cod_prest']) ? $datos['cod_prest'] : '';
         $suc     = isset($datos['sucursal']) ? $datos['sucursal'] : '';
         $nro     = isset($datos['nro_factura']) ? $datos['nro_factura'] : '';
         $periodo = isset($datos['periodo']) ? $datos['periodo'] : '';
@@ -53,6 +55,7 @@ class FacturasTempModel
         $stmt->execute(array(
             ':cofecha'     => $hoy,
             ':coperiodo'   => substr($periodo, 0, 5),
+            ':coprestado'  => substr($codPr, 0, 18),
             ':conomprest'  => substr($prest, 0, 80),
             ':cosucfac'    => substr($suc, 0, 4),
             ':conrofac'    => substr($nro, 0, 18),
@@ -82,7 +85,7 @@ class FacturasTempModel
         $nro = isset($datos['nro_factura']) ? trim($datos['nro_factura']) : '';
         if ($nro !== '') {
             $stmtCheck = $this->db->prepare(
-                "SELECT id, CONOMPREST, COSUCFAC, COFECFAC, COIMPFAC, COTOTALFAC, COPERIODO, texto_ocr
+                "SELECT id, CONOMPREST, COPRESTADO, COSUCFAC, COFECFAC, COIMPFAC, COTOTALFAC, COPERIODO, texto_ocr
                  FROM t_facturas_temp
                  WHERE TRIM(CONROFAC) = :nro
                  LIMIT 1"
@@ -105,6 +108,11 @@ class FacturasTempModel
                     $prest = $existe['CONOMPREST'];
                 }
 
+                $codPr = isset($datos['cod_prest']) ? trim($datos['cod_prest']) : '';
+                if ($codPr === '' && isset($existe['COPRESTADO'])) {
+                    $codPr = trim($existe['COPRESTADO']);
+                }
+
                 $suc = isset($datos['sucursal']) ? trim($datos['sucursal']) : '';
                 if ($suc === '' && isset($existe['COSUCFAC'])) {
                     $suc = $existe['COSUCFAC'];
@@ -123,6 +131,7 @@ class FacturasTempModel
                 $stmtUpd = $this->db->prepare(
                     "UPDATE t_facturas_temp
                      SET CONOMPREST  = :conomprest,
+                         COPRESTADO  = :coprestado,
                          COSUCFAC    = :cosucfac,
                          COFECFAC    = :cofecfac,
                          COIMPFAC    = :coimpfac,
@@ -134,6 +143,7 @@ class FacturasTempModel
                 );
                 $stmtUpd->execute(array(
                     ':conomprest'  => substr($prest, 0, 80),
+                    ':coprestado'  => substr($codPr, 0, 18),
                     ':cosucfac'    => substr($suc, 0, 4),
                     ':cofecfac'    => $fecha,
                     ':coimpfac'    => $nuevoImporte,

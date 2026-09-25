@@ -106,69 +106,65 @@ try {
         throw new Exception('OCR.space: ' . $errApi);
     }
 
-    // ── Prestador: encabezado AFIP (OS, CP y número inicial de OCR) ───────
+    $parser = new FacturaPdfParser();
+    $campos = $parser->parsear($texto);
+
     $prestador = '';
+    $codPrest  = '';
+    $cuitEmisor = isset($campos['cuit']) ? preg_replace('/\D/', '', $campos['cuit']) : '';
 
-    // 1. Vía Rápida Segura: Evita el cuelgue por "aplanamiento" y soporta tildes
-    if (preg_match_all('/Razón Social:\s*([A-Za-z0-9\.\sÁÉÍÓÚáéíóúÑñ&]+)/i', $texto, $matches)) {
-        foreach ($matches[1] as $candidato) {
-            // Cortamos el texto si el OCR pegó campos como Original, Domicilio o CUIT
-            $partes_cand = preg_split('/(Domicilio|Dirección|Condición|CUIT|Punto|Fecha|Original|-|\|)/i', $candidato);
-            $candidato_limpio = trim(isset($partes_cand[0]) ? $partes_cand[0] : '');
+    // 1. CUIT de cabecera → padrón ebamp (nombre y código oficiales)
+    if (strlen($cuitEmisor) === 11) {
+        try {
+            $matchCuit = rfpResolverPrestadorPorCuit(rfpDb(), $cuitEmisor);
+            if (isset($matchCuit['codigo']) && $matchCuit['codigo'] !== '') {
+                $codPrest  = $matchCuit['codigo'];
+                $prestador = isset($matchCuit['nombre']) ? strtoupper(trim($matchCuit['nombre'])) : '';
+            }
+        } catch (Exception $eMatch) {
+            error_log('OCR match CUIT: ' . $eMatch->getMessage());
+        }
+    }
 
-            if (stripos($candidato_limpio, 'COMEDICA') === false && strlen($candidato_limpio) > 3) {
-                $prestador = trim(preg_replace('/^\d+\s+/', '', $candidato_limpio));
-                $prestador = strtoupper($prestador);
+    // 2. Razón social del encabezado (nunca Descripción / Concepto)
+    if ($prestador === '') {
+        $prestador = isset($campos['razon_social']) ? trim($campos['razon_social']) : '';
+    }
+
+    // 3. Fallback: solo líneas de cabecera, sin ítems de detalle
+    if ($prestador === '') {
+        $textoCab = isset($campos['encabezado']) && $campos['encabezado'] !== ''
+            ? $campos['encabezado']
+            : $texto;
+        $lineas = preg_split('/\r\n|\r|\n/', $textoCab);
+        if (!is_array($lineas)) {
+            $lineas = array();
+        }
+        foreach ($lineas as $linea) {
+            $linea = trim($linea);
+            if (strlen($linea) <= 5 || str_word_count($linea) <= 1) {
+                continue;
+            }
+            if (preg_match('/^[#_@|]/', $linea) || preg_match('/^\(\d{4}\)/', $linea) || stripos($linea, 'C.P.') !== false) {
+                continue;
+            }
+            if (preg_match('/\b(DESCRIPCION|CONCEPTO|DETALLE|PRESTACIONES|AMBULATORIAS)\b/i', $linea)) {
+                continue;
+            }
+            if (preg_match('/^(ORIGINAL|DUPLICADO|TRIPLICADO|PAG|PÁG|PAGINA|FACTURA|COMPROBANTE|DOCUMENTO|CÓDIGO|CODIGO|TIPO|PUNTO|FECHA|CUIT|C\.U\.I\.T|COND|CONDICI[OÓ]N|DOMICILIO|DIRECCI[OÓ]N)/i', $linea)) {
+                continue;
+            }
+            if (stripos($linea, 'COMEDICA') !== false || stripos($linea, 'SR(ES)') !== false) {
+                continue;
+            }
+            $linea_limpia = trim(preg_replace('/^Razón Social:\s*/i', '', $linea));
+            if (preg_match('/(SRL|S\.R\.L|S\.A\.S|S\.A\.|S\.A\b|CLINICA|CLÍNICA|SANATORIO|HOSPITAL|CENTRO|LABORATORIO|INSTITUTO|OMINT|OBRA SOCIAL|MUTUAL|FUNDACION|FUNDACIÓN)/i', $linea_limpia)) {
+                $prestador = strtoupper(trim(preg_replace('/^\d+\s+/', '', $linea_limpia)));
                 break;
             }
         }
     }
 
-    // 2. Bucle línea por línea con lista negra estricta
-    if (empty($prestador)) {
-        $lineas = explode("\n", $texto);
-        foreach ($lineas as $linea) {
-            $linea = trim($linea);
-            if (strlen($linea) > 5 && str_word_count($linea) > 1 && !preg_match('/^[#_@|]/', $linea) && !preg_match('/^\(\d{4}\)/', $linea) && stripos($linea, 'C.P.') === false) {
-
-                // LISTA NEGRA: Incluye COND, CONDICIÓN, DOMICILIO, DIRECCIÓN, etc.
-                if (!preg_match('/^(ORIGINAL|DUPLICADO|TRIPLICADO|PAG|PÁG|PAGINA|FACTURA|COMPROBANTE|DOCUMENTO|CÓDIGO|CODIGO|TIPO|PUNTO|FECHA|CUIT|C\.U\.I\.T|COND|CONDICIÓN|CONDICION|DOMICILIO|DIRECCIÓN|DIRECCION)/i', $linea)) {
-
-                    if (stripos($linea, 'COMEDICA') === false && stripos($linea, 'SR(ES)') === false) {
-                        $linea_limpia = trim(preg_replace('/^Razón Social:\s*/i', '', $linea));
-
-                        if (preg_match('/(SRL|S\.R\.L|S\.A\.|S\.A\b|CLINICA|CLÍNICA|SANATORIO|HOSPITAL|CENTRO|LABORATORIO|INSTITUTO|OMINT|OBRA SOCIAL|MUTUAL|FUNDACION|FUNDACIÓN|PRESTACIONES)/i', $linea_limpia)) {
-                            $prestador = trim(preg_replace('/^\d+\s+/', '', $linea_limpia));
-                            $prestador = strtoupper($prestador);
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // 3. Fallback del prestador
-    if (empty($prestador)) {
-        if (!isset($lineas)) {
-            $lineas = explode("\n", $texto);
-        }
-        foreach ($lineas as $linea) {
-            $linea = trim($linea);
-            if (strlen($linea) > 5 && str_word_count($linea) > 1 && !preg_match('/^[#_@|]/', $linea) && !preg_match('/^\(\d{4}\)/', $linea) && stripos($linea, 'C.P.') === false) {
-                if (!preg_match('/^(ORIGINAL|DUPLICADO|TRIPLICADO|PAG|PÁG|PAGINA|FACTURA|COMPROBANTE|DOCUMENTO|CÓDIGO|CODIGO|TIPO|PUNTO|FECHA|CUIT|C\.U\.I\.T|COND|CONDICIÓN|CONDICION|DOMICILIO|DIRECCIÓN|DIRECCION)/i', $linea)) {
-                    if (stripos($linea, 'COMEDICA') === false && stripos($linea, 'SR(ES)') === false) {
-                        $linea_limpia = trim(preg_replace('/^Razón Social:\s*/i', '', $linea));
-                        $prestador = trim(preg_replace('/^\d+\s+/', '', $linea_limpia));
-                        $prestador = strtoupper($prestador);
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    // Limpieza final
     $prestador = trim($prestador, " \t\n\r\0\x0B-.,_:/\\|");
 
     // ── Total: optimizado sin riesgo de Backtracking ─────────────────────
@@ -250,12 +246,10 @@ try {
         throw new Exception('El motor OCR no detectó datos legibles. Verificá la calidad del PDF o cargalo manualmente.');
     }
 
-    $parser = new FacturaPdfParser();
-    $campos = $parser->parsear($texto);
-
     $model = new FacturasTempModel();
     $resultado = $model->upsertDesdePdf(array(
         'prestador'   => $prestador,
+        'cod_prest'   => $codPrest,
         'f_factura'   => isset($campos['fecha']) ? $campos['fecha'] : '',
         'sucursal'    => $sucursal,
         'nro_factura' => $nro_factura,

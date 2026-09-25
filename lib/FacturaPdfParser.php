@@ -61,6 +61,7 @@ class FacturaPdfParser
             'periodo'         => $this->normalizarPeriodo($norm),
             'cuit'            => $cuit,
             'obra_social'     => $this->extraerObraSocial($norm),
+            'encabezado'      => $this->textoCabecera($norm),
         );
     }
 
@@ -136,37 +137,144 @@ class FacturaPdfParser
         return '';
     }
 
+    /**
+     * Razón social del emisor: solo encabezado AFIP, nunca el detalle/concepto.
+     *
+     * @param string $t
+     * @return string
+     */
     private function extraerRazonSocial($t)
     {
+        $cab = $this->textoCabecera($t);
         $patrones = array(
             '/RAZON\s+SOCIAL\s*:?\s*([A-Z0-9ÑÁÉÍÓÚÜ .,&\'\-]{3,80})/u',
-            '/APELLIDO\s+Y\s+NOMBRE\s*\/\s*RAZON\s+SOCIAL\s*:?\s*([A-Z0-9ÑÁÉÍÓÚÜ .,&\'\-]{3,80})/u',
-            '/NOMBRE\s+\/\s*RAZON\s+SOCIAL\s*:?\s*([A-Z0-9ÑÁÉÍÓÚÜ .,&\'\-]{3,80})/u',
             '/EMISOR\s*:?\s*([A-Z0-9ÑÁÉÍÓÚÜ .,&\'\-]{3,80})/u',
             '/(LABORATORIO\s+[A-Z0-9ÑÁÉÍÓÚÜ .,&\'\-]{3,70})/u',
-            '/\b([A-Z0-9ÑÁÉÍÓÚÜ .,&\'\-]{5,70}\s+S\.?A\.?(?:S)?)\b/u',
+            '/\b([A-Z0-9ÑÁÉÍÓÚÜ .,&\'\-]{3,60}\s+S\.?A\.?\s*S\.?)\b/u',
+            '/\b([A-Z0-9ÑÁÉÍÓÚÜ .,&\'\-]{3,60}\s+S\.?R\.?L\.?)\b/u',
+            '/\b([A-Z0-9ÑÁÉÍÓÚÜ .,&\'\-]{3,60}\s+S\.?A\.?)\b/u',
         );
         foreach ($patrones as $re) {
-            if (preg_match($re, $t, $m)) {
-                return $this->limpiarNombre($m[1]);
+            if (preg_match_all($re, $cab, $todos)) {
+                foreach ($todos[1] as $cand) {
+                    $nom = $this->limpiarNombre($cand);
+                    if ($nom !== '' && !$this->esBasuraRazonSocial($nom)) {
+                        return $nom;
+                    }
+                }
             }
         }
 
-        $lineas = preg_split('/\r\n|\r|\n/', $t);
+        $lineas = preg_split('/\r\n|\r|\n/', $cab);
         $n = count($lineas);
-        $i = 0;
         for ($i = 0; $i < $n; $i++) {
             $ln = trim($lineas[$i]);
             if ($ln === '' || strlen($ln) < 4) {
                 continue;
             }
-            if (preg_match('/^(FACTURA|ORIGINAL|CODIGO|COD|CUIT|N[°ºO]|FECHA|IVA|PUNTO|PAGINA|HOJA)\b/u', $ln)) {
+            if ($this->esBasuraRazonSocial($ln)) {
+                continue;
+            }
+            if (preg_match('/^(FACTURA|ORIGINAL|DUPLICADO|CODIGO|COD|CUIT|C\.U\.I\.T|N[°ºO]|FECHA|IVA|PUNTO|PAGINA|HOJA)\b/u', $ln)) {
                 continue;
             }
             return $this->limpiarNombre($ln);
         }
 
         return '';
+    }
+
+    /**
+     * Recorta el comprobante al encabezado (antes de Descripción / Concepto / ítems).
+     *
+     * @param string $t
+     * @return string
+     */
+    private function textoCabecera($t)
+    {
+        $t = isset($t) ? $t : '';
+        if ($t === '') {
+            return '';
+        }
+
+        $corteRe = '/\b(DESCRIPCION|CONCEPTO|DETALLE(?:\s+DE)?|CODIGO\s+(?:DE\s+)?(?:ARTICULO|PRODUCTO|ITEM)|PRECIO\s+UNIT|IMPORTE\s+UNIT|PRODUCTO\s*\/\s*SERVICIO|UNIDAD\s+DE\s+MEDIDA)\b/u';
+        if (preg_match($corteRe, $t, $m, PREG_OFFSET_CAPTURE)) {
+            $pos = (int) $m[0][1];
+            if ($pos > 40) {
+                $t = substr($t, 0, $pos);
+            }
+        }
+
+        $lineas = preg_split('/\r\n|\r|\n/', $t);
+        if (!is_array($lineas) || count($lineas) < 3) {
+            return trim(substr($t, 0, 900));
+        }
+
+        $max = min(22, count($lineas));
+        $out = array();
+        for ($i = 0; $i < $max; $i++) {
+            $ln = trim($lineas[$i]);
+            if ($i >= 6 && $this->esLineaDetalleOConcepto($ln)) {
+                break;
+            }
+            $out[] = $ln;
+        }
+        return trim(implode("\n", $out));
+    }
+
+    /**
+     * @param string $ln
+     * @return bool
+     */
+    private function esLineaDetalleOConcepto($ln)
+    {
+        $ln = trim(isset($ln) ? $ln : '');
+        if ($ln === '') {
+            return false;
+        }
+        if (preg_match('/\b(DESCRIPCION|CONCEPTO|DETALLE|CANTIDAD|PRECIO UNIT|IMPORTE UNIT)\b/u', $ln)) {
+            return true;
+        }
+        if (preg_match('/\bPRESTACIONES\s+AMBULATORIAS\b/u', $ln)) {
+            return true;
+        }
+        if (preg_match('/^\d+([.,]\d+)?\s+[A-Z].{8,}/u', $ln)) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * @param string $ln
+     * @return bool
+     */
+    private function esBasuraRazonSocial($ln)
+    {
+        $ln = trim(isset($ln) ? $ln : '');
+        if ($ln === '') {
+            return true;
+        }
+        if (stripos($ln, 'COMEDICA') !== false) {
+            return true;
+        }
+        if (preg_match('/\b(APELLIDO\s+Y\s+NOMBRE|SENOR(?:ES)?|SR\(ES\)|DESTINATARIO|COMPRADOR|CLIENTE)\b/u', $ln)) {
+            return true;
+        }
+        if ($this->esLineaDetalleOConcepto($ln)) {
+            return true;
+        }
+        if (preg_match('/\bPRESTACIONES\s+AMBULATORIAS\b/u', $ln)) {
+            return true;
+        }
+        if (preg_match('/\b(HONORARIOS MEDICOS|CONSULTA MEDICA|INTERNACION)\b/u', $ln)
+            && !preg_match('/\b(S\.?A\.?S?|S\.?R\.?L|CLINICA|SANATORIO|HOSPITAL|LABORATORIO)\b/u', $ln)
+        ) {
+            return true;
+        }
+        if (preg_match('/\([A-Z0-9]{1,5}\)\s*$/u', $ln) && preg_match('/\b(PRESTACION|PRESTACIONES|CONSULTA|PRACTICA)\b/u', $ln)) {
+            return true;
+        }
+        return false;
     }
 
     private function extraerFecha($t)
@@ -246,13 +354,64 @@ class FacturaPdfParser
 
     private function extraerCuit($t)
     {
-        if (preg_match('/CUIT\s*:?\s*(\d{2}[\-.]?\d{8}[\-.]?\d{1})/u', $t, $m)) {
-            return preg_replace('/\D/', '', $m[1]);
+        $encontrados = $this->listarCuits($this->textoCabecera($t));
+        if (!$encontrados) {
+            $encontrados = $this->listarCuits($t);
         }
-        if (preg_match('/\b(\d{2}\-\d{8}\-\d{1})\b/', $t, $m)) {
-            return preg_replace('/\D/', '', $m[1]);
+        foreach ($encontrados as $c) {
+            if (empty($c['receptor'])) {
+                return $c['cuit'];
+            }
         }
-        return '';
+        return isset($encontrados[0]['cuit']) ? $encontrados[0]['cuit'] : '';
+    }
+
+    /**
+     * @param string $t
+     * @return array
+     */
+    private function listarCuits($t)
+    {
+        $out = array();
+        $t = isset($t) ? $t : '';
+        if ($t === '') {
+            return $out;
+        }
+        $lineas = preg_split('/\r\n|\r|\n/', $t);
+        if (!is_array($lineas) || count($lineas) < 2) {
+            $lineas = array($t);
+        }
+        $n = count($lineas);
+        for ($i = 0; $i < $n; $i++) {
+            $ln = $lineas[$i];
+            $ctx = $ln;
+            if ($i > 0) {
+                $ctx = $lineas[$i - 1] . ' ' . $ctx;
+            }
+            if ($i + 1 < $n) {
+                $ctx .= ' ' . $lineas[$i + 1];
+            }
+            $receptor = (stripos($ctx, 'COMEDICA') !== false
+                || preg_match('/\b(APELLIDO\s+Y\s+NOMBRE|DESTINATARIO|COMPRADOR|CLIENTE|SR\(ES\))\b/u', $ctx));
+
+            if (preg_match_all('/(?:CUIT|C\.U\.I\.T\.?)\s*:?\s*(\d{2}[\-\.\s]?\d{8}[\-\.\s]?\d{1})/u', $ln, $m)) {
+                foreach ($m[1] as $raw) {
+                    $dig = preg_replace('/\D/', '', $raw);
+                    if (strlen($dig) === 11) {
+                        $out[] = array('cuit' => $dig, 'receptor' => $receptor);
+                    }
+                }
+            }
+            if (preg_match_all('/\b(\d{2}[\-\.]\d{8}[\-\.]\d{1})\b/', $ln, $m2)) {
+                foreach ($m2[1] as $raw) {
+                    $dig = preg_replace('/\D/', '', $raw);
+                    if (strlen($dig) === 11) {
+                        $out[] = array('cuit' => $dig, 'receptor' => $receptor);
+                    }
+                }
+            }
+        }
+        return $out;
     }
 
     private function extraerObraSocial($t)

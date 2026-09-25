@@ -344,6 +344,41 @@ function rfpDirUploads()
     return $dir;
 }
 
+/**
+ * Busca el prestador oficial en ebamp por CUIT (solo dígitos).
+ *
+ * @param PDO    $db
+ * @param string $cuit
+ * @return array codigo, nombre, categ, cuit
+ */
+function rfpResolverPrestadorPorCuit($db, $cuit)
+{
+    $out  = array('codigo' => '', 'nombre' => '', 'categ' => '', 'cuit' => '');
+    $cuit = preg_replace('/\D/', '', isset($cuit) ? $cuit : '');
+    if (strlen($cuit) !== 11) {
+        return $out;
+    }
+    try {
+        $stmt = $db->prepare(
+            "SELECT TRIM(codigo) AS codigo,
+                    TRIM(nombre) AS nombre,
+                    TRIM(categ)  AS categ,
+                    TRIM(cuit)   AS cuit
+             FROM ebamp
+             WHERE REPLACE(REPLACE(REPLACE(REPLACE(TRIM(cuit), '-', ''), '.', ''), ' ', ''), '/', '') = :cuit
+             LIMIT 1"
+        );
+        $stmt->execute(array(':cuit' => $cuit));
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row && isset($row['codigo']) && trim($row['codigo']) !== '') {
+            return $row;
+        }
+    } catch (PDOException $e) {
+        error_log('rfpResolverPrestadorPorCuit: ' . $e->getMessage());
+    }
+    return $out;
+}
+
 function rfpH($s)
 {
     $s = isset($s) ? (string) $s : '';
