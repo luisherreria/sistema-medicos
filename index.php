@@ -141,6 +141,9 @@ switch ($route) {
         $action     = trim($_GET['action'] ?? '');
         switch ($action) {
             case 'listado':           $controller->listado();          break;
+            case 'obtener':           $controller->obtener();          break;
+            case 'eliminar':          $controller->eliminar();         break;
+            case 'restaurar':         $controller->restaurar();        break;
             case 'buscar_prestador':  $controller->buscarPrestador();  break;
             case 'buscar_os':         $controller->buscarObraSocial(); break;
             case 'os_prestador':      $controller->osDelPrestador();   break;

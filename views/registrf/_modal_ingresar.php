@@ -27,7 +27,7 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
                     <h6 class="modal-title mb-0 fw-bold" id="modalIngresarFacturaLabel">
                         Registracion de Facturas
                     </h6>
-                    <small style="opacity:.82; font-size:0.71rem;">Ingreso Caratula Facturas Prestador</small>
+                    <small id="modalIngresarFacturaSub" style="opacity:.82; font-size:0.71rem;">Ingreso Caratula Facturas Prestador</small>
                 </div>
             </div>
             <button type="button" class="btn-close btn-close-white"
@@ -37,6 +37,7 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
         <div class="modal-body px-4 py-3" style="background:#f0f4f8;">
         <form id="form-ingresar-factura" autocomplete="off" novalidate onsubmit="return false;">
         <input type="hidden" name="csrf_token"   value="<?= htmlspecialchars($csrfToken) ?>">
+        <input type="hidden" name="id" id="fac-id" value="">
         <input type="hidden" id="fac-cocateg"    name="COCATEG"    value="">
         <input type="hidden" id="fac-conomprest" name="CONOMPREST" value="">
         <input type="hidden" id="fac-conomobra"  name="CONOMOBRA"  value="">
@@ -407,14 +408,111 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
 
     window.abrirModalIngresarFactura = function () {
         resetFac();
+        setTituloModal('Registracion de Facturas', 'Ingreso Caratula Facturas Prestador');
         bootstrap.Modal.getOrCreateInstance(
             document.getElementById('modalIngresarFactura')
         ).show();
         setTimeout(function () { document.getElementById('fac-coperiodo-display').focus(); }, 320);
     };
 
+    window.abrirModalEditarFactura = function (id) {
+        if (!id) {
+            return;
+        }
+        resetFac();
+        setTituloModal('Editar Factura', 'Modificar carátula #' + id);
+        document.getElementById('fac-id').value = String(id);
+        bootstrap.Modal.getOrCreateInstance(
+            document.getElementById('modalIngresarFactura')
+        ).show();
+        fetch('index.php?route=' + ROUTE + '&action=obtener&id=' + encodeURIComponent(id), {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (!res || !res.ok || !res.registro) {
+                    mostrarAlertFac((res && res.error) ? res.error : 'No se pudo cargar la factura.');
+                    return;
+                }
+                llenarFormularioFactura(res.registro);
+            })
+            .catch(function () {
+                mostrarAlertFac('Error de comunicación al cargar la factura.');
+            });
+    };
+
+    function setTituloModal(titulo, sub) {
+        var $t = document.getElementById('modalIngresarFacturaLabel');
+        var $s = document.getElementById('modalIngresarFacturaSub');
+        if ($t) $t.textContent = titulo;
+        if ($s) $s.textContent = sub;
+    }
+
+    function toInputDate(v) {
+        if (!v) return '';
+        var s = String(v).trim();
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.substring(0, 10);
+        var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+        if (m) return m[3] + '-' + m[2] + '-' + m[1];
+        return '';
+    }
+
+    function campoRow(r, keys) {
+        for (var i = 0; i < keys.length; i++) {
+            var k = keys[i];
+            if (r[k] != null && r[k] !== '') return r[k];
+            var up = k.toUpperCase();
+            if (r[up] != null && r[up] !== '') return r[up];
+        }
+        return '';
+    }
+
+    function llenarFormularioFactura(r) {
+        document.getElementById('fac-id').value = String(campoRow(r, ['id']) || document.getElementById('fac-id').value);
+        var per = String(campoRow(r, ['COPERIODO', 'coperiodo']) || '').replace(/[^0-9]/g, '');
+        if (per.length === 4) {
+            document.getElementById('fac-coperiodo-display').value = per.substring(0, 2) + '/' + per.substring(2, 4);
+            document.getElementById('fac-coperiodo').value = per;
+        }
+        document.getElementById('fac-coprestado').value = String(campoRow(r, ['COPRESTADO']));
+        document.getElementById('fac-prest-nombre-display').value = String(campoRow(r, ['CONOMPREST']));
+        document.getElementById('fac-conomprest').value = String(campoRow(r, ['CONOMPREST']));
+        document.getElementById('fac-cocateg').value = String(campoRow(r, ['COCATEG']));
+        document.getElementById('fac-coobrasoc').value = String(campoRow(r, ['COOBRASOC']));
+        document.getElementById('fac-os-nombre-display').value = String(campoRow(r, ['CONOMOBRA']));
+        document.getElementById('fac-conomobra').value = String(campoRow(r, ['CONOMOBRA']));
+        document.getElementById('fac-cotipopre').value = String(campoRow(r, ['COTIPOPRE']));
+        document.getElementById('fac-cosucfac').value = String(campoRow(r, ['COSUCFAC']));
+        document.getElementById('fac-conrofac').value = String(campoRow(r, ['CONROFAC']));
+        document.getElementById('fac-cofecha').value = toInputDate(campoRow(r, ['COFECHA']));
+        document.getElementById('fac-cofecfac').value = toInputDate(campoRow(r, ['COFECFAC']));
+        document.getElementById('fac-cofecrecib').value = toInputDate(campoRow(r, ['COFECRECIB']));
+        document.getElementById('fac-empresa').value = String(campoRow(r, ['COEMPRESA']));
+        document.getElementById('fac-empresa-display').value = String(campoRow(r, ['COEMPRESA']));
+        document.getElementById('fac-cocantidad').value = campoRow(r, ['COCANTIDAD']) || '0';
+        document.getElementById('fac-coimporte').value = campoRow(r, ['COIMPFAC']);
+        document.getElementById('fac-coiva').value = campoRow(r, ['COIVAFAC']);
+        document.getElementById('fac-cocoseguro').value = campoRow(r, ['COCSGFAC']);
+        document.getElementById('fac-cototalfac').value = campoRow(r, ['COTOTALFAC']);
+        document.getElementById('fac-copesos').value = campoRow(r, ['COPESOS']);
+        document.getElementById('fac-cocantcalc').value = campoRow(r, ['COCANTCALC']) || '0';
+        var tipo = String(campoRow(r, ['TPFACT'])).toUpperCase();
+        if (tipo === 'ONLINE' || tipo === 'O') {
+            document.getElementById('fac-tipo-online').checked = true;
+        } else {
+            document.getElementById('fac-tipo-fisica').checked = true;
+        }
+        var fac = String(campoRow(r, ['COFACTURA'])).toUpperCase();
+        if (fac === 'NO' || fac === 'N' || fac === '0') {
+            document.getElementById('fac-tienefac-no').checked = true;
+        } else {
+            document.getElementById('fac-tienefac-si').checked = true;
+        }
+    }
+
     function resetFac() {
         osDelPrestador = [];
+        document.getElementById('fac-id').value = '';
         document.getElementById('fac-cototalfac').value = '';
         ['fac-coimporte','fac-coiva','fac-cocoseguro','fac-copesos'].forEach(function (id) {
             document.getElementById(id).value = '';
@@ -959,10 +1057,10 @@ $periodoDisp   = substr($periodoActual, 0, 2) . '/' . substr($periodoActual, 2, 
             var toast = document.createElement('div');
             toast.className = 'alert alert-success position-fixed shadow';
             toast.style.cssText = 'top:70px;right:20px;z-index:9999;font-size:.85rem;padding:10px 18px;border-radius:8px;';
-            toast.innerHTML = '<i class="fa-solid fa-check-circle me-2"></i>Factura registrada correctamente.';
+            toast.innerHTML = '<i class="fa-solid fa-check-circle me-2"></i>' + esc(res.msg || 'Factura guardada correctamente.');
             document.body.appendChild(toast);
             setTimeout(function () { toast.remove(); }, 3500);
-            if (typeof window.rfCargar === 'function') window.rfCargar(1);
+            if (typeof window.rfCargar === 'function') window.rfCargar();
         })
         .catch(function () {
             btn.disabled = false;

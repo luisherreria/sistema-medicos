@@ -94,6 +94,12 @@ tailwind.config = { corePlugins: { preflight: false } };
            class="btn btn-sm btn-info flex-shrink-0"
            style="color: white;font-size:0.78rem;">📋 Ver Pendientes</a>
 
+        <button type="button" id="rf-btn-papelera"
+                class="btn btn-sm btn-outline-secondary flex-shrink-0"
+                style="font-size:0.78rem;" title="Ver facturas dadas de baja">
+            <i class="fas fa-trash-alt me-1"></i>Ver Eliminados
+        </button>
+
         <!-- Terminar -->
         <a href="index.php?route=dashboard"
            class="btn btn-sm btn-danger fw-semibold flex-shrink-0 ms-auto"
@@ -118,6 +124,7 @@ tailwind.config = { corePlugins: { preflight: false } };
             <th class="rf-th sortable" data-col="COUSUARIO"   style="width:80px;">USUARIO <span class="rf-sort-icon">⇅</span></th>
             <th class="rf-th sortable" data-col="COFECCARGA"  style="width:110px;">F. CARGA <span class="rf-sort-icon">⇅</span></th>
             <th class="rf-th" style="width:52px;text-align:center;">PDF</th>
+            <th class="rf-th" style="width:88px;text-align:center;">ACCIONES</th>
         </tr>
         </thead>
         <tbody id="rf-tbody">
@@ -189,6 +196,10 @@ tailwind.config = { corePlugins: { preflight: false } };
 }
 .td-total { text-align: right; font-family: monospace; font-weight: 600; color: #0f5132; }
 .td-fecha { font-family: monospace; font-size: .75rem; color: #475569; }
+#rf-tabla .rf-btn-editar,
+#rf-tabla .rf-btn-eliminar,
+#rf-tabla .rf-btn-restaurar { font-size: .95rem; line-height: 1; vertical-align: middle; }
+#rf-app.rf-modo-papelera #rf-tabla thead tr { background: #7c2d12; }
 </style>
 
 <script>
@@ -196,6 +207,7 @@ tailwind.config = { corePlugins: { preflight: false } };
     'use strict';
 
     var ROUTE = 'registro-facturas';
+    var CSRF  = <?= json_encode($_SESSION['csrf_token'] ?? '') ?>;
 
     var state = {
         busqueda : '',
@@ -206,6 +218,7 @@ tailwind.config = { corePlugins: { preflight: false } };
         total    : 0,
         paginas  : 1,
         cargando : false,
+        papelera : false,
     };
 
     // ── Referencias DOM ────────────────────────────────────────────────────
@@ -234,7 +247,8 @@ tailwind.config = { corePlugins: { preflight: false } };
             + '&pagina='    + state.pagina
             + '&por_pagina='+ state.porPag
             + '&order_col=' + encodeURIComponent(state.orderCol)
-            + '&order_dir=' + state.orderDir;
+            + '&order_dir=' + state.orderDir
+            + '&eliminados=' + (state.papelera ? '1' : '0');
 
         fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(function (r) { return r.json(); })
@@ -264,8 +278,11 @@ tailwind.config = { corePlugins: { preflight: false } };
     // ══════════════════════════════════════════════════════════════════════
     function renderTabla(datos) {
         if (!datos || !datos.length) {
+            var vacio = state.papelera
+                ? 'No hay facturas en la papelera.'
+                : 'No se encontraron facturas.';
             $tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted py-4" style="font-size:.82rem;">'
-                + '<i class="fa-solid fa-inbox me-2"></i>No se encontraron facturas.</td></tr>';
+                + '<i class="fa-solid fa-inbox me-2"></i>' + vacio + '</td></tr>';
             return;
         }
 
@@ -310,9 +327,47 @@ tailwind.config = { corePlugins: { preflight: false } };
                 + '<td style="font-size:.73rem;color:#64748b;">' + esc(r.COUSUARIO || '') + '</td>'
                 + '<td class="td-fecha">' + fecCarga + '</td>'
                 + '<td style="text-align:center;">' + pdfCell + '</td>'
+                + '<td style="text-align:center;white-space:nowrap;">' + accionesHtml(r) + '</td>'
                 + '</tr>';
         });
         $tbody.innerHTML = html;
+    }
+
+    function accionesHtml(r) {
+        var id = r.id || r.ID || '';
+        if (!id) {
+            return '—';
+        }
+        var editar = '<button type="button" class="btn btn-sm btn-link p-0 me-2 rf-btn-editar" data-id="' + esc(String(id)) + '"'
+            + ' title="Editar"><i class="fas fa-edit text-primary"></i></button>';
+        if (state.papelera) {
+            return editar
+                + '<button type="button" class="btn btn-sm btn-link p-0 rf-btn-restaurar" data-id="' + esc(String(id)) + '"'
+                + ' title="Restaurar"><i class="fas fa-undo text-success"></i></button>';
+        }
+        return editar
+            + '<button type="button" class="btn btn-sm btn-link p-0 rf-btn-eliminar" data-id="' + esc(String(id)) + '"'
+            + ' title="Eliminar"><i class="fas fa-trash-alt text-danger"></i></button>';
+    }
+
+    function postAccion(action, id, okMsg) {
+        var fd = new FormData();
+        fd.append('csrf_token', CSRF);
+        fd.append('id', id);
+        fetch('index.php?route=' + ROUTE + '&action=' + action, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: fd
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (!res || !res.ok) {
+                    alert((res && res.error) ? res.error : 'No se pudo completar la acción.');
+                    return;
+                }
+                cargar(state.pagina);
+            })
+            .catch(function () { alert('Error de comunicación.'); });
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -376,6 +431,50 @@ tailwind.config = { corePlugins: { preflight: false } };
     // ══════════════════════════════════════════════════════════════════════
     document.getElementById('btn-rf-ingresar').addEventListener('click', function () {
         window.abrirModalIngresarFactura();
+    });
+
+    document.getElementById('rf-btn-papelera').addEventListener('click', function () {
+        state.papelera = !state.papelera;
+        this.classList.toggle('btn-warning', state.papelera);
+        this.classList.toggle('btn-outline-secondary', !state.papelera);
+        this.innerHTML = state.papelera
+            ? '<i class="fas fa-inbox me-1"></i>Ver Activas'
+            : '<i class="fas fa-trash-alt me-1"></i>Ver Eliminados';
+        var $app = document.getElementById('rf-app');
+        if ($app) $app.classList.toggle('rf-modo-papelera', state.papelera);
+        cargar(1);
+    });
+
+    $tbody.addEventListener('click', function (e) {
+        var $btn = e.target.closest('.rf-btn-editar, .rf-btn-eliminar, .rf-btn-restaurar');
+        if (!$btn) {
+            return;
+        }
+        var id = $btn.getAttribute('data-id');
+        if (!id) {
+            return;
+        }
+        if ($btn.classList.contains('rf-btn-editar')) {
+            if (typeof window.abrirModalEditarFactura === 'function') {
+                window.abrirModalEditarFactura(id);
+            }
+            return;
+        }
+        if ($btn.classList.contains('rf-btn-restaurar')) {
+            var goRest = function () { postAccion('restaurar', id); };
+            if (typeof window.confirmarAccion === 'function') {
+                window.confirmarAccion('¿Restaurar factura?', 'La factura volverá al listado activo.', 'Sí, restaurar', goRest);
+            } else if (confirm('¿Restaurar esta factura?')) {
+                goRest();
+            }
+            return;
+        }
+        var goDel = function () { postAccion('eliminar', id); };
+        if (typeof window.confirmarAccion === 'function') {
+            window.confirmarAccion('¿Eliminar factura?', 'Se enviará a la papelera (baja lógica).', 'Sí, eliminar', goDel);
+        } else if (confirm('¿Eliminar esta factura?')) {
+            goDel();
+        }
     });
 
     document.getElementById('btn-rf-imprimir').addEventListener('click', function () {

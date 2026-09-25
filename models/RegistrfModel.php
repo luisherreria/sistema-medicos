@@ -107,9 +107,10 @@ class RegistrfModel
         int    $limit     = 50,
         int    $offset    = 0,
         string $orderCol  = 'COPERIODO',
-        string $orderDir  = 'DESC'
+        string $orderDir  = 'DESC',
+        bool   $soloEliminados = false
     ): array {
-        [$where, $params] = $this->buildWhere($busqueda);
+        [$where, $params] = $this->buildWhere($busqueda, $soloEliminados);
         $orderExpr = $this->resolverOrderExpr($orderCol, $orderDir);
 
         $stmtCnt = $this->db->prepare("SELECT COUNT(*) FROM registrf{$where}");
@@ -123,6 +124,7 @@ class RegistrfModel
             : ($this->tieneColumna('COFECFAC') ? $this->col('COFECFAC') : 'NULL');
 
         $sql = "SELECT
+                    " . ($this->tieneColumna('id') ? $this->col('id') . ' AS id,' : 'NULL AS id,') . "
                     TRIM({$this->col('COPERIODO')})  AS COPERIODO,
                     TRIM({$this->col('COOBRASOC')})  AS COOBRASOC,
                     TRIM({$this->col('COPRESTADO')}) AS COPRESTADO,
@@ -350,18 +352,93 @@ class RegistrfModel
     //  HELPERS
     // ══════════════════════════════════════════════════════════════════════
 
-    private function buildWhere(string $busqueda): array
+    /**
+     * @return array{0:string,1:array<string,string>}
+     */
+    private function buildWhere(string $busqueda, bool $soloEliminados = false): array
     {
-        if ($busqueda === '') {
-            return ['', []];
+        $filtros = [];
+        $params  = [];
+
+        if ($this->tieneColumna('eliminado')) {
+            $colEli = $this->col('eliminado');
+            if ($soloEliminados) {
+                $filtros[] = "{$colEli} = 1";
+            } else {
+                $filtros[] = "({$colEli} = 0 OR {$colEli} IS NULL)";
+            }
         }
-        $val    = '%' . $busqueda . '%';
-        $where  = " WHERE ({$this->col('CONOMPREST')} LIKE :b1"
+
+        if ($busqueda !== '') {
+            $val = '%' . $busqueda . '%';
+            $filtros[] = "({$this->col('CONOMPREST')} LIKE :b1"
                 . " OR {$this->col('CONROFAC')} LIKE :b2"
                 . " OR {$this->col('COOBRASOC')} LIKE :b3"
                 . " OR {$this->col('COPRESTADO')} LIKE :b4)";
-        $params = [':b1' => $val, ':b2' => $val, ':b3' => $val, ':b4' => $val];
+            $params = [':b1' => $val, ':b2' => $val, ':b3' => $val, ':b4' => $val];
+        }
+
+        $where = $filtros ? (' WHERE ' . implode(' AND ', $filtros)) : '';
         return [$where, $params];
+    }
+
+    public function obtenerPorId(int $id): ?array
+    {
+        if ($id <= 0 || !$this->tieneColumna('id')) {
+            return null;
+        }
+        $stmt = $this->db->prepare('SELECT * FROM registrf WHERE ' . $this->col('id') . ' = :id LIMIT 1');
+        $stmt->execute([':id' => $id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row !== false ? $row : null;
+    }
+
+    public function setEliminado(int $id, int $valor): bool
+    {
+        if ($id <= 0 || !$this->tieneColumna('id') || !$this->tieneColumna('eliminado')) {
+            return false;
+        }
+        $stmt = $this->db->prepare(
+            'UPDATE registrf SET ' . $this->col('eliminado') . ' = :eli WHERE ' . $this->col('id') . ' = :id'
+        );
+        $stmt->execute([
+            ':eli' => $valor ? 1 : 0,
+            ':id'  => $id,
+        ]);
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * @param array<string,mixed> $campos
+     */
+    public function actualizar(int $id, array $campos): bool
+    {
+        if ($id <= 0 || !$this->tieneColumna('id')) {
+            return false;
+        }
+        $descubiertas = $this->columnas();
+        $sets = [];
+        $bind = [':id' => $id];
+        $i = 0;
+        foreach ($campos as $logico => $valor) {
+            $key = strtoupper((string) $logico);
+            if ($key === 'ID' || $key === 'ELIMINADO' || in_array($key, self::COLS_NUNCA, true)) {
+                continue;
+            }
+            if (!isset($descubiertas[$key])) {
+                continue;
+            }
+            $ph = ':u' . $i++;
+            $sets[] = $descubiertas[$key] . ' = ' . $ph;
+            $bind[$ph] = $valor;
+        }
+        if (!$sets) {
+            return false;
+        }
+        $sql = 'UPDATE registrf SET ' . implode(', ', $sets)
+             . ' WHERE ' . $this->col('id') . ' = :id';
+        $this->db->prepare($sql)->execute($bind);
+        return true;
     }
 
     private function resolverOrderExpr(string $col, string $dir): string

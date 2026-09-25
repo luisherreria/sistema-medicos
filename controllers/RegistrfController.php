@@ -43,8 +43,10 @@ class RegistrfController
         $orderDir = strtoupper(trim($_GET['order_dir'] ?? 'DESC'));
         $offset   = ($pagina - 1) * $porPag;
 
+        $soloEliminados = (int)($_GET['eliminados'] ?? 0) === 1;
+
         try {
-            $res     = $model->obtenerFacturas($busqueda, $porPag, $offset, $orderCol, $orderDir);
+            $res     = $model->obtenerFacturas($busqueda, $porPag, $offset, $orderCol, $orderDir, $soloEliminados);
             $total   = $res['total'];
             $datos   = $res['datos'];
             $paginas = $total > 0 ? (int) ceil($total / $porPag) : 1;
@@ -58,6 +60,60 @@ class RegistrfController
                 'pagina'  => $pagina,
                 'datos'   => $datos,
             ], JSON_UNESCAPED_UNICODE);
+        } catch (PDOException $e) {
+            $this->jsonError($e->getMessage());
+        }
+        exit;
+    }
+
+    public function obtener(): void
+    {
+        $this->requireAuth();
+        $this->requirePermiso('MNU_CD_FAC_INGRESO');
+        header('Content-Type: application/json; charset=utf-8');
+
+        $id = (int)($_GET['id'] ?? 0);
+        require_once __DIR__ . '/../models/RegistrfModel.php';
+        $model = new RegistrfModel();
+        $row = $model->obtenerPorId($id);
+        if (!$row) {
+            $this->jsonError('Factura no encontrada.');
+        }
+        $this->utf8($row);
+        echo json_encode(['ok' => true, 'registro' => $row], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    public function eliminar(): void
+    {
+        $this->cambiarEliminado(1, 'Factura enviada a la papelera.');
+    }
+
+    public function restaurar(): void
+    {
+        $this->cambiarEliminado(0, 'Factura restaurada.');
+    }
+
+    private function cambiarEliminado(int $valor, string $okMsg): void
+    {
+        $this->requireAuth();
+        $this->requirePermiso('MNU_CD_FAC_INGRESO');
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (!hash_equals($_SESSION['csrf_token'] ?? '', $_POST['csrf_token'] ?? '')) {
+            $this->jsonError('Token de seguridad inválido.');
+        }
+        $id = (int)($_POST['id'] ?? 0);
+        if ($id <= 0) {
+            $this->jsonError('ID de factura inválido.');
+        }
+        require_once __DIR__ . '/../models/RegistrfModel.php';
+        $model = new RegistrfModel();
+        try {
+            if (!$model->setEliminado($id, $valor)) {
+                $this->jsonError('No se pudo actualizar el registro.');
+            }
+            echo json_encode(['ok' => true, 'msg' => $okMsg], JSON_UNESCAPED_UNICODE);
         } catch (PDOException $e) {
             $this->jsonError($e->getMessage());
         }
@@ -352,9 +408,7 @@ class RegistrfController
             require_once __DIR__ . '/../models/RegistrfModel.php';
             $model = new RegistrfModel();
 
-            // Nombres VFP reales. insertar() omite los que no existan.
-            // COIMPORTE no existe: el importe es COIMPFAC.
-            $model->insertar([
+            $campos = [
                 'COFECHA'     => $fecha,
                 'COPERIODO'   => $periodo,
                 'COOBRASOC'   => $coobrasoc,
@@ -377,12 +431,19 @@ class RegistrfController
                 'TPFACT'      => $tpfact,
                 'COTIPOPRE'   => $g('COTIPOPRE'),
                 'COUSUARIO'   => $usr,
-                'COFECCARGA'  => date('Y-m-d H:i:s'),
                 'COFECRECIB'  => $fecRecib,
                 'CODISKETTE'  => $g('CODISKETTE') ?: 'N',
-            ]);
+            ];
 
-            echo json_encode(['ok' => true, 'msg' => 'Factura registrada correctamente.'], JSON_UNESCAPED_UNICODE);
+            $idEdit = (int)($_POST['id'] ?? 0);
+            if ($idEdit > 0) {
+                $model->actualizar($idEdit, $campos);
+                echo json_encode(['ok' => true, 'msg' => 'Factura actualizada correctamente.'], JSON_UNESCAPED_UNICODE);
+            } else {
+                $campos['COFECCARGA'] = date('Y-m-d H:i:s');
+                $model->insertar($campos);
+                echo json_encode(['ok' => true, 'msg' => 'Factura registrada correctamente.'], JSON_UNESCAPED_UNICODE);
+            }
         } catch (PDOException $e) {
             $this->jsonError('Error al guardar: ' . $e->getMessage());
         }
