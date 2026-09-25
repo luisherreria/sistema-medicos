@@ -154,9 +154,110 @@
         XLSX.writeFile(wb, nombreArchivo);
     }
 
+    function filaCeldas(tr) {
+        var out = [];
+        var i;
+        for (i = 0; i < tr.cells.length; i++) {
+            out.push((tr.cells[i].innerText || '').replace(/\s+/g, ' ').trim());
+        }
+        return out;
+    }
+
+    /**
+     * Una sola hoja Excel con grupos, tablas y totales del contenedor.
+     *
+     * @param {string} containerId
+     * @param {string} [nombreArchivo='listado.xlsx']
+     */
+    function exportarContenedorAExcel(containerId, nombreArchivo) {
+        if (typeof XLSX === 'undefined') {
+            alert('SheetJS (XLSX) no está disponible.');
+            return;
+        }
+        var root = document.getElementById(containerId);
+        if (!root) {
+            alert('No se encontró el listado para exportar.');
+            return;
+        }
+        var aoa = [];
+        var kids = root.children;
+        var i;
+        var j;
+        var trs;
+        for (i = 0; i < kids.length; i++) {
+            var el = kids[i];
+            if (el.classList && el.classList.contains('rpt-top')) {
+                var org = el.querySelector('.rpt-org');
+                var h1 = el.querySelector('h1');
+                var meta = el.querySelector('.rpt-meta');
+                if (org) { aoa.push([(org.textContent || '').trim()]); }
+                if (h1) { aoa.push([(h1.textContent || '').trim()]); }
+                if (meta) { aoa.push([(meta.textContent || '').replace(/\s+/g, ' ').trim()]); }
+                aoa.push([]);
+                continue;
+            }
+            if (el.classList && (el.classList.contains('rpt-grupo') || el.classList.contains('rpt-os'))) {
+                aoa.push([(el.innerText || '').replace(/\s+/g, ' ').trim()]);
+                continue;
+            }
+            if (el.tagName === 'TABLE') {
+                trs = el.querySelectorAll('tr');
+                for (j = 0; j < trs.length; j++) {
+                    aoa.push(filaCeldas(trs[j]));
+                }
+                aoa.push([]);
+            }
+        }
+        if (!aoa.length) {
+            alert('No hay datos para exportar.');
+            return;
+        }
+        nombreArchivo = (nombreArchivo || 'listado.xlsx').replace(/\.xlsx$/i, '') + '.xlsx';
+        var wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Listado');
+        XLSX.writeFile(wb, nombreArchivo);
+    }
+
+    /**
+     * PDF del contenedor del listado (cabecera + grupos + tablas).
+     *
+     * @param {string} containerId
+     * @param {string} [nombreArchivo='listado.pdf']
+     * @param {string} [orientacion='landscape']
+     */
+    function exportarElementoAPDF(containerId, nombreArchivo, orientacion) {
+        if (typeof html2pdf === 'undefined') {
+            alert('html2pdf.js no está disponible.');
+            return;
+        }
+        var el = document.getElementById(containerId);
+        if (!el) {
+            alert('No se encontró el listado para exportar.');
+            return;
+        }
+        nombreArchivo = (nombreArchivo || 'listado.pdf').replace(/\.pdf$/i, '') + '.pdf';
+        var ori = (orientacion === 'portrait') ? 'portrait' : 'landscape';
+        html2pdf()
+            .set({
+                margin: 8,
+                filename: nombreArchivo,
+                image: { type: 'jpeg', quality: 0.95 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: ori }
+            })
+            .from(el)
+            .save()
+            .catch(function (err) {
+                console.error('exportarElementoAPDF:', err);
+                alert('No se pudo generar el PDF.');
+            });
+    }
+
     // API global
     global.exportarTablaAPDF = exportarTablaAPDF;
     global.exportarTablaAExcel = exportarTablaAExcel;
+    global.exportarContenedorAExcel = exportarContenedorAExcel;
+    global.exportarElementoAPDF = exportarElementoAPDF;
     global.clonarTablaParaExport = clonarTablaParaExport;
 
 })(typeof window !== 'undefined' ? window : this);
