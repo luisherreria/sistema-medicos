@@ -11,8 +11,10 @@ rfpRequirePermiso();
 
 $model = new FacturasTempModel();
 $filas = array();
+$osCodigos = array();
 try {
     $filas = $model->listarPendientes();
+    $osCodigos = rfpListarOsCodigos(rfpDb());
 } catch (PDOException $e) {
     $errorLista = $e->getMessage();
 }
@@ -61,6 +63,18 @@ require_once dirname(__FILE__) . '/views/layouts/header.php';
 <!-- FIN ZONA DE CARGA DROPZONE -->
 
 <div class="rfp-grid-wrap">
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <label class="mb-0 text-muted" style="font-size:.78rem;" for="rfp-os-select">Obra Social</label>
+        <select id="rfp-os-select" class="form-select form-select-sm" style="width:180px;font-size:.78rem;">
+            <option value="">Seleccionar TACODIGO…</option>
+            <?php foreach ($osCodigos as $osCod): ?>
+                <option value="<?= htmlspecialchars($osCod, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($osCod, ENT_QUOTES, 'UTF-8') ?></option>
+            <?php endforeach; ?>
+        </select>
+        <button type="button" id="rfp-btn-aplicar-os" class="btn btn-sm btn-outline-primary" style="font-size:.78rem;">
+            Aplicar OS
+        </button>
+    </div>
     <table id="tabla-facturas" class="table table-sm table-striped table-hover w-100" style="font-size:.78rem;">
         <thead>
         <tr>
@@ -681,6 +695,7 @@ window.formatearImporteVisual = formatearImporteVisual;
                         $inp.val(String(res.codigo).toUpperCase());
                     }
                     $tr.find('.inp-nro').focus().select();
+                    rfpAprenderAlias($tr, $jq.trim($inp.val()));
                     return;
                 }
                 rfpBuscarPrestadorModal(val);
@@ -769,6 +784,7 @@ window.formatearImporteVisual = formatearImporteVisual;
         $tr.find('.edit-codprest').val(codigo);
         rfpCerrarModal('modalBusquedaPrestador');
         $tr.find('.inp-nro').focus().select();
+        rfpAprenderAlias($tr, codigo);
     });
 
     $jq('#resultadosObraSoc').on('click', 'tr.rfp-res-obrasoc', function () {
@@ -790,6 +806,81 @@ window.formatearImporteVisual = formatearImporteVisual;
         } else if (window.bootstrap && bootstrap.Modal) {
             bootstrap.Modal.getOrCreateInstance(document.getElementById('modalTextoOcr')).show();
         }
+    });
+
+    function rfpAprenderAlias($tr, codigo) {
+        var nombre = $tr.attr('data-prestador-ocr') || '';
+        codigo = $jq.trim(codigo || '');
+        if (!nombre || !codigo) {
+            return;
+        }
+        var fd = new FormData();
+        fd.append('csrf_token', CSRF);
+        fd.append('accion', 'aprender_alias');
+        fd.append('nombre_ocr', nombre);
+        fd.append('codigo_prestador', codigo);
+        fetch('acciones_masivas.php', {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: fd
+        });
+    }
+
+    $jq('#rfp-btn-aplicar-os').on('click', function () {
+        var os = $jq.trim($jq('#rfp-os-select').val() || '');
+        if (os === '') {
+            alert('Seleccioná una obra social (TACODIGO).');
+            return;
+        }
+        var n = 0;
+        $jq(dt.rows().nodes()).find('.rfp-check:checked').each(function () {
+            $jq(this).closest('tr').find('.inp-os, .edit-obrasoc').val(os);
+            n++;
+        });
+        if (!n) {
+            alert('Marcá al menos una fila para aplicar la obra social.');
+            return;
+        }
+    });
+
+    $jq(document).on('click', '#tabla-facturas .rfp-btn-duplicar', function () {
+        var $tr = $jq(this).closest('tr');
+        var id = $tr.attr('data-id') || $jq(this).attr('data-id');
+        if (!id) {
+            return;
+        }
+        var fd = new FormData();
+        fd.append('csrf_token', CSRF);
+        fd.append('accion', 'duplicar');
+        fd.append('id', id);
+        fetch('acciones_masivas.php', {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: fd
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (!res || !res.ok || !res.html) {
+                    alert((res && res.error) ? res.error : 'No se pudo duplicar la fila.');
+                    return;
+                }
+                var $wrap = $jq('<table><tbody></tbody></table>');
+                $wrap.find('tbody').append(res.html);
+                var trNode = $wrap.find('tr')[0];
+                if (!trNode) {
+                    return;
+                }
+                try {
+                    dt.row.add(trNode).draw(false);
+                    var $nueva = $jq('#tabla-facturas').find('tr[data-id="' + res.id + '"]');
+                    if ($nueva.length) {
+                        $tr.after($nueva);
+                    }
+                } catch (eDup) {
+                    window.location.reload();
+                }
+            })
+            .catch(function () { alert('Error de comunicación al duplicar.'); });
     });
 
     $jq('#rfp-check-all').on('change', function () {

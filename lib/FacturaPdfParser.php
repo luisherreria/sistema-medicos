@@ -5,6 +5,11 @@
  */
 class FacturaPdfParser
 {
+    /** CUIT de COMEDICA (comprador): nunca es el prestador/emisor. */
+    private static $CUIT_RECEPTOR = array(
+        '30708704284',
+    );
+
     /**
      * Meses en español (nombre completo y abreviatura) → MM.
      * @var array
@@ -138,7 +143,7 @@ class FacturaPdfParser
     }
 
     /**
-     * Razón social del emisor: solo encabezado AFIP, nunca el detalle/concepto.
+     * Razón social del emisor: cabecera AFIP (2.ª línea / SAS), nunca el comprador ni el detalle.
      *
      * @param string $t
      * @return string
@@ -146,10 +151,60 @@ class FacturaPdfParser
     private function extraerRazonSocial($t)
     {
         $cab = $this->textoCabecera($t);
+        $lineas = preg_split('/\r\n|\r|\n/', $cab);
+        if (!is_array($lineas)) {
+            $lineas = array();
+        }
+
+        // 1) Sociedad en las primeras líneas (RESOCENTER SAS gana a un nombre de persona)
+        $societaria = $this->buscarRazonSocietaria($cab);
+        if ($societaria !== '') {
+            return $societaria;
+        }
+
+        // 2) Segunda línea del encabezado (típico: logo/ORIGINAL + razón social)
+        if (isset($lineas[1])) {
+            $nom2 = $this->limpiarNombre(trim($lineas[1]));
+            if ($this->pareceRazonSocialEmisor($nom2)) {
+                return $nom2;
+            }
+        }
+
         $patrones = array(
             '/RAZON\s+SOCIAL\s*:?\s*([A-Z0-9ÑÁÉÍÓÚÜ .,&\'\-]{3,80})/u',
             '/EMISOR\s*:?\s*([A-Z0-9ÑÁÉÍÓÚÜ .,&\'\-]{3,80})/u',
             '/(LABORATORIO\s+[A-Z0-9ÑÁÉÍÓÚÜ .,&\'\-]{3,70})/u',
+        );
+        foreach ($patrones as $re) {
+            if (preg_match_all($re, $cab, $todos)) {
+                foreach ($todos[1] as $cand) {
+                    $nom = $this->limpiarNombre($cand);
+                    if ($this->pareceRazonSocialEmisor($nom)) {
+                        return $nom;
+                    }
+                }
+            }
+        }
+
+        $n = count($lineas);
+        $limite = min(8, $n);
+        for ($i = 0; $i < $limite; $i++) {
+            $ln = trim($lineas[$i]);
+            if ($this->pareceRazonSocialEmisor($this->limpiarNombre($ln))) {
+                return $this->limpiarNombre($ln);
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param string $cab
+     * @return string
+     */
+    private function buscarRazonSocietaria($cab)
+    {
+        $patrones = array(
             '/\b([A-Z0-9ÑÁÉÍÓÚÜ .,&\'\-]{3,60}\s+S\.?A\.?\s*S\.?)\b/u',
             '/\b([A-Z0-9ÑÁÉÍÓÚÜ .,&\'\-]{3,60}\s+S\.?R\.?L\.?)\b/u',
             '/\b([A-Z0-9ÑÁÉÍÓÚÜ .,&\'\-]{3,60}\s+S\.?A\.?)\b/u',
@@ -158,30 +213,41 @@ class FacturaPdfParser
             if (preg_match_all($re, $cab, $todos)) {
                 foreach ($todos[1] as $cand) {
                     $nom = $this->limpiarNombre($cand);
-                    if ($nom !== '' && !$this->esBasuraRazonSocial($nom)) {
+                    if ($this->pareceRazonSocialEmisor($nom)) {
                         return $nom;
                     }
                 }
             }
         }
-
-        $lineas = preg_split('/\r\n|\r|\n/', $cab);
-        $n = count($lineas);
-        for ($i = 0; $i < $n; $i++) {
-            $ln = trim($lineas[$i]);
-            if ($ln === '' || strlen($ln) < 4) {
-                continue;
-            }
-            if ($this->esBasuraRazonSocial($ln)) {
-                continue;
-            }
-            if (preg_match('/^(FACTURA|ORIGINAL|DUPLICADO|CODIGO|COD|CUIT|C\.U\.I\.T|N[°ºO]|FECHA|IVA|PUNTO|PAGINA|HOJA)\b/u', $ln)) {
-                continue;
-            }
-            return $this->limpiarNombre($ln);
-        }
-
         return '';
+    }
+
+    /**
+     * @param string $ln
+     * @return bool
+     */
+    private function pareceRazonSocialEmisor($ln)
+    {
+        $ln = trim(isset($ln) ? $ln : '');
+        if ($ln === '' || strlen($ln) < 5) {
+            return false;
+        }
+        if ($this->esBasuraRazonSocial($ln) || $this->esEtiquetaCabecera($ln)) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * @param string $ln
+     * @return bool
+     */
+    private function esEtiquetaCabecera($ln)
+    {
+        return (bool) preg_match(
+            '/^(FACTURA|ORIGINAL|DUPLICADO|TRIPLICADO|CODIGO|COD|CUIT|C\.U\.I\.T|N[°ºO]|FECHA|IVA|PUNTO|PAGINA|HOJA|COMPROBANTE)\b/u',
+            trim(isset($ln) ? $ln : '')
+        );
     }
 
     /**
@@ -354,16 +420,60 @@ class FacturaPdfParser
 
     private function extraerCuit($t)
     {
-        $encontrados = $this->listarCuits($this->textoCabecera($t));
+        $cab = $this->textoCabecera($t);
+        $encontrados = $this->filtrarCuitsEmisor($this->listarCuits($cab));
         if (!$encontrados) {
-            $encontrados = $this->listarCuits($t);
+            $encontrados = $this->filtrarCuitsEmisor($this->listarCuits($t));
+        }
+        // Empresa (30/33) del encabezado antes que CUIT de persona (20/27)
+        foreach ($encontrados as $c) {
+            $pref = substr($c['cuit'], 0, 2);
+            if (empty($c['receptor']) && ($pref === '30' || $pref === '33' || $pref === '34')) {
+                return $c['cuit'];
+            }
         }
         foreach ($encontrados as $c) {
             if (empty($c['receptor'])) {
                 return $c['cuit'];
             }
         }
-        return isset($encontrados[0]['cuit']) ? $encontrados[0]['cuit'] : '';
+        return '';
+    }
+
+    /**
+     * @param array $lista
+     * @return array
+     */
+    private function filtrarCuitsEmisor($lista)
+    {
+        $out = array();
+        if (!is_array($lista)) {
+            return $out;
+        }
+        $vistos = array();
+        foreach ($lista as $c) {
+            $cuit = isset($c['cuit']) ? $c['cuit'] : '';
+            if ($cuit === '' || isset($vistos[$cuit])) {
+                continue;
+            }
+            if ($this->esCuitReceptor($cuit)) {
+                continue;
+            }
+            $vistos[$cuit] = true;
+            $c['receptor'] = !empty($c['receptor']);
+            $out[] = $c;
+        }
+        return $out;
+    }
+
+    /**
+     * @param string $cuit
+     * @return bool
+     */
+    private function esCuitReceptor($cuit)
+    {
+        $cuit = preg_replace('/\D/', '', isset($cuit) ? $cuit : '');
+        return in_array($cuit, self::$CUIT_RECEPTOR, true);
     }
 
     /**
@@ -384,34 +494,53 @@ class FacturaPdfParser
         $n = count($lineas);
         for ($i = 0; $i < $n; $i++) {
             $ln = $lineas[$i];
+            // Solo línea actual + anterior: la siguiente suele ser el bloque del comprador (COMEDICA).
             $ctx = $ln;
             if ($i > 0) {
                 $ctx = $lineas[$i - 1] . ' ' . $ctx;
             }
-            if ($i + 1 < $n) {
-                $ctx .= ' ' . $lineas[$i + 1];
-            }
             $receptor = (stripos($ctx, 'COMEDICA') !== false
                 || preg_match('/\b(APELLIDO\s+Y\s+NOMBRE|DESTINATARIO|COMPRADOR|CLIENTE|SR\(ES\))\b/u', $ctx));
 
+            $candidatos = array();
             if (preg_match_all('/(?:CUIT|C\.U\.I\.T\.?)\s*:?\s*(\d{2}[\-\.\s]?\d{8}[\-\.\s]?\d{1})/u', $ln, $m)) {
                 foreach ($m[1] as $raw) {
-                    $dig = preg_replace('/\D/', '', $raw);
-                    if (strlen($dig) === 11) {
-                        $out[] = array('cuit' => $dig, 'receptor' => $receptor);
-                    }
+                    $candidatos[] = $raw;
                 }
             }
             if (preg_match_all('/\b(\d{2}[\-\.]\d{8}[\-\.]\d{1})\b/', $ln, $m2)) {
                 foreach ($m2[1] as $raw) {
-                    $dig = preg_replace('/\D/', '', $raw);
-                    if (strlen($dig) === 11) {
-                        $out[] = array('cuit' => $dig, 'receptor' => $receptor);
-                    }
+                    $candidatos[] = $raw;
                 }
+            }
+            if (preg_match_all('/(?<!\d)(\d{11})(?!\d)/', $ln, $m3)) {
+                foreach ($m3[1] as $raw) {
+                    $candidatos[] = $raw;
+                }
+            }
+            foreach ($candidatos as $raw) {
+                $dig = preg_replace('/\D/', '', $raw);
+                if (!$this->esCuitValidoArg($dig)) {
+                    continue;
+                }
+                $esRec = $receptor || $this->esCuitReceptor($dig);
+                $out[] = array('cuit' => $dig, 'receptor' => $esRec);
             }
         }
         return $out;
+    }
+
+    /**
+     * @param string $dig
+     * @return bool
+     */
+    private function esCuitValidoArg($dig)
+    {
+        if (strlen($dig) !== 11 || !ctype_digit($dig)) {
+            return false;
+        }
+        $pref = substr($dig, 0, 2);
+        return in_array($pref, array('20', '23', '24', '27', '30', '33', '34'), true);
     }
 
     private function extraerObraSocial($t)

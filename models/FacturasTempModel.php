@@ -50,6 +50,9 @@ class FacturasTempModel
         $suc     = isset($datos['sucursal']) ? $datos['sucursal'] : '';
         $nro     = isset($datos['nro_factura']) ? $datos['nro_factura'] : '';
         $periodo = isset($datos['periodo']) ? $datos['periodo'] : '';
+        if ($periodo === '') {
+            $periodo = DateHelper::getPeriodoAnterior();
+        }
 
         $stmt = $this->db->prepare($sql);
         $stmt->execute(array(
@@ -127,6 +130,9 @@ class FacturasTempModel
                 if ($periodo === '' && isset($existe['COPERIODO'])) {
                     $periodo = $existe['COPERIODO'];
                 }
+                if ($periodo === '') {
+                    $periodo = DateHelper::getPeriodoAnterior();
+                }
 
                 $stmtUpd = $this->db->prepare(
                     "UPDATE t_facturas_temp
@@ -181,7 +187,10 @@ class FacturasTempModel
                        COFECFAC          AS F_FACTURA,
                        TRIM(COSUCFAC)    AS SUCURSAL,
                        TRIM(CONROFAC)    AS NRO_FACTURA,
-                       GREATEST(COALESCE(COTOTALFAC, 0), COALESCE(COIMPFAC, 0)) AS TOTAL,
+                       CASE
+                           WHEN COTOTALFAC IS NULL AND COIMPFAC IS NULL THEN NULL
+                           ELSE GREATEST(COALESCE(COTOTALFAC, 0), COALESCE(COIMPFAC, 0))
+                       END               AS TOTAL,
                        COIMPFAC          AS IMPORTE,
                        TRIM(COOBRASOC)   AS O_SOCIAL,
                        TRIM(COPERIODO)   AS PERIODO,
@@ -208,7 +217,10 @@ class FacturasTempModel
                        COFECFAC          AS F_FACTURA,
                        TRIM(COSUCFAC)    AS SUCURSAL,
                        TRIM(CONROFAC)    AS NRO_FACTURA,
-                       GREATEST(COALESCE(COTOTALFAC, 0), COALESCE(COIMPFAC, 0)) AS TOTAL,
+                       CASE
+                           WHEN COTOTALFAC IS NULL AND COIMPFAC IS NULL THEN NULL
+                           ELSE GREATEST(COALESCE(COTOTALFAC, 0), COALESCE(COIMPFAC, 0))
+                       END               AS TOTAL,
                        COIMPFAC          AS IMPORTE,
                        TRIM(COOBRASOC)   AS O_SOCIAL,
                        TRIM(COPERIODO)   AS PERIODO,
@@ -319,6 +331,54 @@ class FacturasTempModel
         $stmt = $this->db->prepare('DELETE FROM t_facturas_temp WHERE id IN (' . $in . ')');
         $stmt->execute($limpios);
         return $stmt->rowCount();
+    }
+
+    /**
+     * Clona una fila; obra social e importe quedan en blanco.
+     *
+     * @param int $id
+     * @return int id nuevo
+     */
+    public function duplicar($id)
+    {
+        $id = (int) $id;
+        $stmt = $this->db->prepare('SELECT * FROM t_facturas_temp WHERE id = :id LIMIT 1');
+        $stmt->execute(array(':id' => $id));
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row) {
+            return 0;
+        }
+
+        $cols = array();
+        $vals = array();
+        $bind = array();
+        $i = 0;
+        foreach ($row as $col => $val) {
+            if (strtoupper($col) === 'ID') {
+                continue;
+            }
+            $up = strtoupper($col);
+            if ($up === 'COOBRASOC' || $up === 'CONOMOBRA') {
+                $val = '';
+            }
+            if ($up === 'COIMPFAC' || $up === 'COTOTALFAC') {
+                $val = null;
+            }
+            if ($up === 'MARCADO') {
+                $val = 0;
+            }
+            $ph = ':p' . $i;
+            $i++;
+            $cols[] = '`' . str_replace('`', '', $col) . '`';
+            $vals[] = $ph;
+            $bind[$ph] = $val;
+        }
+        if (!$cols) {
+            return 0;
+        }
+        $sql = 'INSERT INTO t_facturas_temp (' . implode(',', $cols) . ') VALUES (' . implode(',', $vals) . ')';
+        $this->db->prepare($sql)->execute($bind);
+        return (int) $this->db->lastInsertId();
     }
 
     /**

@@ -27,6 +27,33 @@ try {
     $model = new FacturasTempModel();
     $db    = $model->pdo();
 
+    if ($accion === 'duplicar') {
+        $id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
+        if ($id <= 0) {
+            rfpJsonError('ID inválido para duplicar.');
+        }
+        $nuevoId = $model->duplicar($id);
+        if ($nuevoId <= 0) {
+            rfpJsonError('No se pudo duplicar la fila.');
+        }
+        $fila = $model->obtenerPorId($nuevoId);
+        rfpJsonOk(array(
+            'id'   => $nuevoId,
+            'html' => $fila ? rfpHtmlFilaPendiente($fila) : '',
+        ));
+    }
+
+    if ($accion === 'aprender_alias') {
+        $nombre = isset($_POST['nombre_ocr']) ? trim($_POST['nombre_ocr']) : '';
+        $codigo = isset($_POST['codigo_prestador']) ? trim($_POST['codigo_prestador']) : '';
+        $cuit   = isset($_POST['cuit']) ? trim($_POST['cuit']) : '';
+        if ($nombre === '' || $codigo === '') {
+            rfpJsonError('Faltan nombre OCR o código de prestador.');
+        }
+        PrestadoresAlias::guardar($db, $nombre, $codigo, $cuit);
+        rfpJsonOk(array('msg' => 'Alias de prestador guardado.'));
+    }
+
     if ($accion === 'eliminar') {
         $ids = isset($_POST['ids']) ? $_POST['ids'] : array();
         if (!is_array($ids) || !$ids) {
@@ -68,11 +95,10 @@ try {
             $per = isset($fila['PERIODO']) ? trim($fila['PERIODO']) : '';
             $importeRaw = rfpImportePost($fila);
             $importe_limpio = rfpLimpiarImporte($importeRaw);
-            if ($importe_limpio <= 0) {
-                $existente = $model->obtenerPorId($id);
-                if ($existente) {
-                    $importe_limpio = rfpLimpiarImporte(rfpImporteMostrar($existente));
-                }
+            $existente = $model->obtenerPorId($id);
+            $nombreOcrFila = ($existente && isset($existente['PRESTADOR'])) ? trim($existente['PRESTADOR']) : '';
+            if ($importe_limpio <= 0 && $existente) {
+                $importe_limpio = rfpLimpiarImporte(rfpImporteMostrar($existente));
             }
             $importe = $importeRaw;
             file_put_contents(
@@ -155,6 +181,10 @@ try {
                     ':c'  => $prRes['categ'],
                     ':id' => $id,
                 ));
+            }
+
+            if ($nombreOcrFila !== '' && $codFinal !== '') {
+                PrestadoresAlias::guardar($db, $nombreOcrFila, $codFinal, '');
             }
         }
 

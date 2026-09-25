@@ -111,27 +111,58 @@ try {
 
     $prestador = '';
     $codPrest  = '';
+    $razonCab  = isset($campos['razon_social']) ? trim($campos['razon_social']) : '';
     $cuitEmisor = isset($campos['cuit']) ? preg_replace('/\D/', '', $campos['cuit']) : '';
+    if (rfpCuitEsCompradorComedica($cuitEmisor)) {
+        $cuitEmisor = '';
+    }
 
-    // 1. CUIT de cabecera → padrón ebamp (nombre y código oficiales)
-    if (strlen($cuitEmisor) === 11) {
+    // 0. Diccionario aprendido (nombre_ocr / CUIT → código)
+    try {
+        $alias = PrestadoresAlias::buscar(rfpDb(), $razonCab, $cuitEmisor);
+        if (isset($alias['codigo']) && $alias['codigo'] !== '') {
+            $codPrest  = $alias['codigo'];
+            $prestador = $razonCab !== '' ? $razonCab : (isset($alias['nombre_ocr']) ? $alias['nombre_ocr'] : '');
+        }
+    } catch (Exception $eAlias) {
+        error_log('OCR alias: ' . $eAlias->getMessage());
+    }
+
+    // 1. CUIT del emisor → padrón (no usar CUIT de COMEDICA)
+    if ($codPrest === '' && strlen($cuitEmisor) === 11) {
         try {
             $matchCuit = rfpResolverPrestadorPorCuit(rfpDb(), $cuitEmisor);
             if (isset($matchCuit['codigo']) && $matchCuit['codigo'] !== '') {
-                $codPrest  = $matchCuit['codigo'];
-                $prestador = isset($matchCuit['nombre']) ? strtoupper(trim($matchCuit['nombre'])) : '';
+                $nomOficial = isset($matchCuit['nombre']) ? strtoupper(trim($matchCuit['nombre'])) : '';
+                if ($razonCab === '' || rfpNombresPrestadorCompatibles($razonCab, $nomOficial)) {
+                    $codPrest  = $matchCuit['codigo'];
+                    $prestador = $nomOficial !== '' ? $nomOficial : $razonCab;
+                }
             }
         } catch (Exception $eMatch) {
             error_log('OCR match CUIT: ' . $eMatch->getMessage());
         }
     }
 
-    // 2. Razón social del encabezado (nunca Descripción / Concepto)
-    if ($prestador === '') {
-        $prestador = isset($campos['razon_social']) ? trim($campos['razon_social']) : '';
+    // 2. Si el CUIT no calza con la razón social del encabezado, buscar por nombre
+    if ($codPrest === '' && $prestador === '' && $razonCab !== '') {
+        try {
+            $matchNom = rfpResolverPrestadorPorNombre(rfpDb(), $razonCab);
+            if (isset($matchNom['codigo']) && $matchNom['codigo'] !== '') {
+                $codPrest  = $matchNom['codigo'];
+                $prestador = isset($matchNom['nombre']) ? strtoupper(trim($matchNom['nombre'])) : $razonCab;
+            }
+        } catch (Exception $eNom) {
+            error_log('OCR match nombre: ' . $eNom->getMessage());
+        }
     }
 
-    // 3. Fallback: solo líneas de cabecera, sin ítems de detalle
+    // 3. Razón social del encabezado (2.ª línea / SAS), nunca el detalle
+    if ($prestador === '') {
+        $prestador = $razonCab;
+    }
+
+    // 4. Fallback: solo líneas de cabecera, sin ítems de detalle
     if ($prestador === '') {
         $textoCab = isset($campos['encabezado']) && $campos['encabezado'] !== ''
             ? $campos['encabezado']
@@ -239,6 +270,9 @@ try {
         $mes = $matches[1];
         $anio_corto = substr($matches[2], -2);
         $periodo = $anio_corto . '/' . $mes;
+    }
+    if ($periodo === '') {
+        $periodo = DateHelper::getPeriodoAnterior();
     }
 
     // ── Validación de seguridad (Freno a filas fantasmas) ─────────────────

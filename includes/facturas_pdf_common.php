@@ -22,6 +22,12 @@ if (!isset($_SESSION['csrf_token']) || $_SESSION['csrf_token'] === '') {
 }
 
 require_once dirname(__FILE__) . '/../config/database.php';
+if (!class_exists('DateHelper')) {
+    require_once dirname(__FILE__) . '/../classes/DateHelper.php';
+}
+if (!class_exists('PrestadoresAlias')) {
+    require_once dirname(__FILE__) . '/../classes/PrestadoresAlias.php';
+}
 
 if (!class_exists('Permission')) {
     require_once dirname(__FILE__) . '/../models/Permission.php';
@@ -146,6 +152,7 @@ function rfpAsegurarTabla()
             $db->exec('ALTER TABLE t_facturas_temp ADD COLUMN marcado TINYINT(1) DEFAULT 0');
             $db->exec('ALTER TABLE t_facturas_temp ADD COLUMN texto_ocr TEXT DEFAULT NULL');
             rfpAsegurarArchivoPdfRegistrf($db);
+            PrestadoresAlias::asegurarTabla($db);
             return;
         }
 
@@ -161,6 +168,7 @@ function rfpAsegurarTabla()
         }
 
         rfpAsegurarArchivoPdfRegistrf($db);
+        PrestadoresAlias::asegurarTabla($db);
     } catch (PDOException $e) {
         error_log('rfpAsegurarTabla: ' . $e->getMessage());
         throw $e;
@@ -333,6 +341,37 @@ function rfpPeriodoDisplay($aamm)
     return $p;
 }
 
+/**
+ * TACODIGO de obrasoc para el combo de asignación masiva.
+ *
+ * @param PDO $db
+ * @return array
+ */
+function rfpListarOsCodigos($db)
+{
+    $out = array();
+    try {
+        $stmt = $db->query(
+            "SELECT DISTINCT TRIM(TACODIGO) AS tacodigo
+             FROM obrasoc
+             WHERE TRIM(TACODIGO) <> ''
+             ORDER BY TACODIGO ASC"
+        );
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (!is_array($rows)) {
+            return $out;
+        }
+        foreach ($rows as $row) {
+            if (isset($row['tacodigo']) && $row['tacodigo'] !== '') {
+                $out[] = $row['tacodigo'];
+            }
+        }
+    } catch (PDOException $e) {
+        error_log('rfpListarOsCodigos: ' . $e->getMessage());
+    }
+    return $out;
+}
+
 function rfpDirUploads()
 {
     $dir = dirname(__FILE__) . '/../public/uploads/facturas_pdf/';
@@ -351,11 +390,112 @@ function rfpDirUploads()
  * @param string $cuit
  * @return array codigo, nombre, categ, cuit
  */
+function rfpCuitEsCompradorComedica($cuit)
+{
+    $cuit = preg_replace('/\D/', '', isset($cuit) ? $cuit : '');
+    return $cuit === '30708704284';
+}
+
+function rfpNombresPrestadorCompatibles($a, $b)
+{
+    $norm = function ($s) {
+        $s = strtoupper(trim(isset($s) ? $s : ''));
+        $s = strtr($s, array(
+            'Á' => 'A', 'É' => 'E', 'Í' => 'I', 'Ó' => 'O', 'Ú' => 'U', 'Ü' => 'U', 'Ñ' => 'N',
+        ));
+        $s = preg_replace('/[^A-Z0-9 ]/', ' ', $s);
+        return trim(preg_replace('/\s+/', ' ', $s));
+    };
+    $a = $norm($a);
+    $b = $norm($b);
+    if ($a === '' || $b === '') {
+        return true;
+    }
+    if ($a === $b || strpos($a, $b) !== false || strpos($b, $a) !== false) {
+        return true;
+    }
+    $stop = array('SA', 'SAS', 'SRL', 'S', 'A', 'DE', 'LA', 'EL', 'LOS', 'LAS', 'Y', 'DEL', 'THE');
+    $tok = function ($s) use ($stop) {
+        $out = array();
+        foreach (preg_split('/\s+/', $s) as $p) {
+            if (strlen($p) >= 4 && !in_array($p, $stop, true)) {
+                $out[] = $p;
+            }
+        }
+        return $out;
+    };
+    $ta = $tok($a);
+    $tb = $tok($b);
+    foreach ($ta as $p) {
+        if (in_array($p, $tb, true)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function rfpResolverPrestadorPorNombre($db, $nombre)
+{
+    $out = array('codigo' => '', 'nombre' => '', 'categ' => '', 'cuit' => '');
+    $nombre = trim(isset($nombre) ? $nombre : '');
+    if ($nombre === '' || strlen($nombre) < 4) {
+        return $out;
+    }
+    $q = strtoupper($nombre);
+    $q = preg_replace('/\b(S\.?A\.?S?|S\.?R\.?L\.?|SA|SAS|SRL)\b/i', ' ', $q);
+    $q = trim(preg_replace('/\s+/', ' ', $q));
+    $palabras = preg_split('/\s+/', $q, -1, PREG_SPLIT_NO_EMPTY);
+    if (!is_array($palabras)) {
+        $palabras = array();
+    }
+    $utiles = array();
+    foreach ($palabras as $p) {
+        if (strlen($p) >= 4) {
+            $utiles[] = $p;
+        }
+    }
+    if (!$utiles) {
+        return $out;
+    }
+    try {
+        $conds = array();
+        $params = array();
+        foreach ($utiles as $i => $p) {
+            $conds[] = '(nombre LIKE :n' . $i . ' OR nomfantas LIKE :f' . $i . ')';
+            $params[':n' . $i] = '%' . $p . '%';
+            $params[':f' . $i] = '%' . $p . '%';
+        }
+        $stmt = $db->prepare(
+            "SELECT TRIM(codigo) AS codigo,
+                    TRIM(nombre) AS nombre,
+                    TRIM(categ)  AS categ,
+                    TRIM(cuit)   AS cuit
+             FROM ebamp
+             WHERE " . implode(' AND ', $conds) . "
+             LIMIT 5"
+        );
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (!is_array($rows) || !$rows) {
+            return $out;
+        }
+        foreach ($rows as $row) {
+            if (rfpNombresPrestadorCompatibles($nombre, isset($row['nombre']) ? $row['nombre'] : '')) {
+                return $row;
+            }
+        }
+        return $rows[0];
+    } catch (PDOException $e) {
+        error_log('rfpResolverPrestadorPorNombre: ' . $e->getMessage());
+    }
+    return $out;
+}
+
 function rfpResolverPrestadorPorCuit($db, $cuit)
 {
     $out  = array('codigo' => '', 'nombre' => '', 'categ' => '', 'cuit' => '');
     $cuit = preg_replace('/\D/', '', isset($cuit) ? $cuit : '');
-    if (strlen($cuit) !== 11) {
+    if (strlen($cuit) !== 11 || rfpCuitEsCompradorComedica($cuit)) {
         return $out;
     }
     try {
@@ -425,8 +565,13 @@ function rfpHtmlFilaPendiente($r)
     } else {
         $nroMostrar = $nro;
     }
-    $total = rfpImporteMostrar($r);
+    $impVacio = (!isset($r['TOTAL']) || $r['TOTAL'] === null || $r['TOTAL'] === '')
+        && (!isset($r['IMPORTE']) || $r['IMPORTE'] === null || $r['IMPORTE'] === '');
+    $total = $impVacio ? '' : rfpImporteMostrar($r);
     $perDisp  = rfpPeriodoDisplay(isset($r['PERIODO']) ? $r['PERIODO'] : '');
+    if ($perDisp === '') {
+        $perDisp = DateHelper::getPeriodoAnterior();
+    }
     $chk      = (!empty($r['marcado'])) ? ' checked' : '';
     $prestOcr = isset($r['PRESTADOR']) ? $r['PRESTADOR'] : '';
     $archPdf  = isset($r['archivo_pdf']) ? $r['archivo_pdf'] : '';
@@ -456,6 +601,8 @@ function rfpHtmlFilaPendiente($r)
     $html .= ' data-texto="' . rfpH($textoOcr) . '" title="Ver texto OCR">';
     $html .= '<i class="fa-solid fa-magnifying-glass"></i> Ver OCR</button></td>';
     $html .= '<td class="text-center text-nowrap">';
+    $html .= '<button type="button" class="btn btn-sm btn-link p-0 me-1 rfp-btn-duplicar" data-id="' . $id . '" title="Duplicar fila">';
+    $html .= '<i class="fas fa-copy text-info"></i></button> ';
     if ($archPdf !== '') {
         $html .= '<a href="public/uploads/facturas_pdf/' . htmlspecialchars($archPdf) . '"';
         $html .= ' target="_blank" class="btn btn-sm btn-primary" title="Ver PDF">📄</a> ';
