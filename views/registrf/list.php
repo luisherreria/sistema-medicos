@@ -19,6 +19,7 @@ $breadcrumb = [
 
 require_once __DIR__ . '/../../views/layouts/header.php';
 require_once __DIR__ . '/_modal_ingresar.php';
+require_once __DIR__ . '/_modal_listados.php';
 ?>
 
 <!-- ── Tailwind CSS CDN (preflight desactivado para convivir con Bootstrap 5) -->
@@ -83,12 +84,27 @@ tailwind.config = { corePlugins: { preflight: false } };
             <i class="fa-solid fa-plus me-1"></i>Ingresar
         </button>
 
-        <!-- Botón Imprimir -->
-        <button id="btn-rf-imprimir"
-                class="btn btn-sm btn-outline-secondary flex-shrink-0"
-                style="font-size:0.78rem;" title="Imprimir listado">
-            <i class="fa-solid fa-print me-1"></i>Imprimir
-        </button>
+        <!-- Listados / Imprimir -->
+        <div class="dropdown flex-shrink-0">
+            <button id="btn-rf-imprimir" type="button"
+                    class="btn btn-sm btn-outline-secondary dropdown-toggle"
+                    data-bs-toggle="dropdown" aria-expanded="false"
+                    style="font-size:0.78rem;" title="Listados de Registración">
+                <i class="fa-solid fa-print me-1"></i>Imprimir
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end" style="font-size:.78rem;">
+                <li>
+                    <a class="dropdown-item" href="#" data-rf-rpt="detallado">
+                        Detallado x Obra Social
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item" href="#" data-rf-rpt="totales">
+                        Totales Acumulados x Obra Social
+                    </a>
+                </li>
+            </ul>
+        </div>
 
         <a href="index.php?route=registro-facturas-pdf"
            class="btn btn-sm btn-info flex-shrink-0"
@@ -477,9 +493,143 @@ tailwind.config = { corePlugins: { preflight: false } };
         }
     });
 
-    document.getElementById('btn-rf-imprimir').addEventListener('click', function () {
-        window.print();
+    var rfLstTitulos = {
+        detallado: 'Detallado x Obra Social',
+        totales:   'Totales Acumulados x Obra Social'
+    };
+
+    function rfNormPeriodoInput(el) {
+        var v = String(el.value || '').replace(/[^0-9]/g, '');
+        if (v.length >= 4) {
+            el.value = v.substring(0, 2) + '/' + v.substring(2, 4);
+        }
+    }
+
+    function rfPeriodoValido(v) {
+        return /^\d{2}\/\d{2}$/.test(String(v || '').trim());
+    }
+
+    function rfAbrirModalListado(tipo) {
+        tipo = (tipo === 'totales') ? 'totales' : 'detallado';
+        document.getElementById('rf-lst-tipo-rpt').value = tipo;
+        document.getElementById('rf-lst-titulo').textContent = rfLstTitulos[tipo];
+        document.getElementById('rf-lst-err').classList.add('d-none');
+        var el = document.getElementById('modalListadosRf');
+        if (window.bootstrap && bootstrap.Modal) {
+            bootstrap.Modal.getOrCreateInstance(el).show();
+        } else if (window.jQuery && jQuery.fn.modal) {
+            jQuery(el).modal('show');
+        }
+        setTimeout(function () { document.getElementById('rf-lst-desde').focus(); }, 250);
+    }
+
+    document.querySelectorAll('[data-rf-rpt]').forEach(function (a) {
+        a.addEventListener('click', function (e) {
+            e.preventDefault();
+            rfAbrirModalListado(a.getAttribute('data-rf-rpt'));
+        });
     });
+
+    ['rf-lst-desde', 'rf-lst-hasta'].forEach(function (id) {
+        var $el = document.getElementById(id);
+        if (!$el) return;
+        $el.addEventListener('blur', function () { rfNormPeriodoInput(this); });
+        $el.addEventListener('keydown', function (e) {
+            if (e.which === 13) {
+                e.preventDefault();
+                rfNormPeriodoInput(this);
+                document.getElementById(id === 'rf-lst-desde' ? 'rf-lst-hasta' : 'rf-lst-os').focus();
+            }
+        });
+    });
+
+    function rfLookupLst(tipo, inputId, nomId) {
+        var $inp = document.getElementById(inputId);
+        var $nom = document.getElementById(nomId);
+        var q = String($inp.value || '').trim();
+        if (q === '') {
+            $nom.value = '';
+            $nom.placeholder = tipo === 'os' ? 'Todas' : 'Todos';
+            return;
+        }
+        var url = 'index.php?route=' + ROUTE
+            + (tipo === 'os' ? '&action=buscar_os' : '&action=buscar_prestador')
+            + '&exact=1&q=' + encodeURIComponent(q);
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                var row = (res && res.ok && res.datos && res.datos[0]) ? res.datos[0] : null;
+                if (!row) {
+                    $nom.value = '';
+                    $nom.placeholder = 'No encontrado — Enter para reintentar';
+                    return;
+                }
+                if (tipo === 'os') {
+                    $inp.value = row.cosoc || q;
+                    $nom.value = row.nombre || '';
+                } else {
+                    $inp.value = row.codigo || row.matricula || q;
+                    $nom.value = row.nombre || '';
+                }
+            })
+            .catch(function () { $nom.placeholder = 'Error de búsqueda'; });
+    }
+
+    document.getElementById('rf-lst-os').addEventListener('keydown', function (e) {
+        if (e.which === 13) {
+            e.preventDefault();
+            this.value = String(this.value || '').toUpperCase();
+            rfLookupLst('os', 'rf-lst-os', 'rf-lst-os-nom');
+            document.getElementById('rf-lst-prest').focus();
+        }
+    });
+    document.getElementById('rf-lst-os').addEventListener('blur', function () {
+        this.value = String(this.value || '').toUpperCase();
+        rfLookupLst('os', 'rf-lst-os', 'rf-lst-os-nom');
+    });
+    document.getElementById('rf-lst-prest').addEventListener('keydown', function (e) {
+        if (e.which === 13) {
+            e.preventDefault();
+            rfLookupLst('prestador', 'rf-lst-prest', 'rf-lst-prest-nom');
+            document.getElementById('rf-lst-tipopre').focus();
+        }
+    });
+    document.getElementById('rf-lst-prest').addEventListener('blur', function () {
+        rfLookupLst('prestador', 'rf-lst-prest', 'rf-lst-prest-nom');
+    });
+
+    document.getElementById('rf-lst-aceptar').addEventListener('click', function () {
+        rfNormPeriodoInput(document.getElementById('rf-lst-desde'));
+        rfNormPeriodoInput(document.getElementById('rf-lst-hasta'));
+        var desde = document.getElementById('rf-lst-desde').value.trim();
+        var hasta = document.getElementById('rf-lst-hasta').value.trim();
+        var $err = document.getElementById('rf-lst-err');
+        if (!rfPeriodoValido(desde) || !rfPeriodoValido(hasta)) {
+            $err.textContent = 'Completá Desde y Hasta en formato AA/MM (ej: 26/07).';
+            $err.classList.remove('d-none');
+            return;
+        }
+        $err.classList.add('d-none');
+        var tipo = document.getElementById('rf-lst-tipo-rpt').value === 'totales'
+            ? 'rpt_totales_os' : 'rpt_detallado_os';
+        var os = document.getElementById('rf-lst-os').value.trim();
+        var prest = document.getElementById('rf-lst-prest').value.trim();
+        var tipopre = document.getElementById('rf-lst-tipopre').value;
+        var url = 'index.php?route=' + ROUTE + '&action=' + tipo
+            + '&desde=' + encodeURIComponent(desde)
+            + '&hasta=' + encodeURIComponent(hasta)
+            + '&os=' + encodeURIComponent(os)
+            + '&prestador=' + encodeURIComponent(prest)
+            + '&tipo=' + encodeURIComponent(tipopre)
+            + '&os_nom=' + encodeURIComponent(document.getElementById('rf-lst-os-nom').value)
+            + '&prest_nom=' + encodeURIComponent(document.getElementById('rf-lst-prest-nom').value);
+        window.open(url, '_blank');
+    });
+
+    var openListado = <?= json_encode($_GET['listado'] ?? '') ?>;
+    if (openListado === 'detallado' || openListado === 'totales') {
+        rfAbrirModalListado(openListado);
+    }
 
     // ══════════════════════════════════════════════════════════════════════
     //  HELPERS

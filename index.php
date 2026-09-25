@@ -150,8 +150,19 @@ switch ($route) {
             case 'guardar':           $controller->guardar();          break;
             case 'rpt_prioritarios':  $controller->rptPrioritarios();  break;
             case 'rpt_recibos':       $controller->rptRecibos();       break;
+            case 'rpt_detallado_os':  $controller->rptDetalladoOs();   break;
+            case 'rpt_totales_os':    $controller->rptTotalesOs();     break;
             default:                  $controller->index();            break;
         }
+        break;
+
+    case 'listado-detallado-os':
+        $_GET['listado'] = 'detallado';
+        (new RegistrfController())->index();
+        break;
+    case 'totales-acumulados-os':
+        $_GET['listado'] = 'totales';
+        (new RegistrfController())->index();
         break;
 
     // ── Carga Automática de Facturas PDF ──────────────────────────────────

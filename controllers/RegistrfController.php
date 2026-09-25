@@ -19,7 +19,7 @@ class RegistrfController
     public function index(): void
     {
         $this->requireAuth();
-        $this->requirePermiso('MNU_CD_FAC_INGRESO');
+        $this->requirePermisoListados();
         require_once __DIR__ . '/../views/registrf/list.php';
     }
 
@@ -530,6 +530,102 @@ class RegistrfController
         $this->renderReporte('Recibos Ingresados', $periodo, $filas, 'recibos');
     }
 
+    /** GET ?action=rpt_detallado_os&desde=AA/MM&hasta=AA/MM&os=&prestador=&tipo= */
+    public function rptDetalladoOs(): void
+    {
+        $this->requireAuth();
+        $this->requirePermisoListados();
+
+        $filtros = $this->filtrosListadoFromRequest();
+        if ($filtros['error'] !== '') {
+            $this->rptError($filtros['error']);
+            return;
+        }
+
+        require_once __DIR__ . '/../models/RegistrfModel.php';
+        try {
+            $model  = new RegistrfModel();
+            $filas  = $model->reporteDetalladoOs($filtros);
+            $this->utf8($filas);
+            $grupos = $model->agruparDetalladoPorSubgrupo($filas);
+            $this->utf8($grupos);
+        } catch (PDOException $e) {
+            $this->rptError('Error al generar el reporte: ' . $e->getMessage());
+            return;
+        }
+
+        $titulo = 'Detallado x Obra Social';
+        require __DIR__ . '/../views/registrf/rpt_detallado_os.php';
+        exit;
+    }
+
+    /** GET ?action=rpt_totales_os&desde=AA/MM&hasta=AA/MM&os=&prestador=&tipo= */
+    public function rptTotalesOs(): void
+    {
+        $this->requireAuth();
+        $this->requirePermisoListados();
+
+        $filtros = $this->filtrosListadoFromRequest();
+        if ($filtros['error'] !== '') {
+            $this->rptError($filtros['error']);
+            return;
+        }
+
+        require_once __DIR__ . '/../models/RegistrfModel.php';
+        try {
+            $model = new RegistrfModel();
+            $res   = $model->reporteTotalesAcumOs($filtros);
+            $this->utf8($res);
+            $obras = $res['obras'] ?? [];
+            $total = $res['total'] ?? [];
+        } catch (PDOException $e) {
+            $this->rptError('Error al generar el reporte: ' . $e->getMessage());
+            return;
+        }
+
+        $titulo = 'Totales Acumulados x Obra Social';
+        require __DIR__ . '/../views/registrf/rpt_totales_os.php';
+        exit;
+    }
+
+    /**
+     * @return array<string,string>
+     */
+    private function filtrosListadoFromRequest(): array
+    {
+        require_once __DIR__ . '/../models/RegistrfModel.php';
+        $model = new RegistrfModel();
+        $desde = trim((string) ($_GET['desde'] ?? ''));
+        $hasta = trim((string) ($_GET['hasta'] ?? ''));
+        $dNorm = $model->normalizarPeriodo($desde);
+        $hNorm = $model->normalizarPeriodo($hasta);
+        $error = '';
+        if ($dNorm === '' || $hNorm === '') {
+            $error = 'Debe indicar período Desde y Hasta en formato AA/MM.';
+        }
+        $os = strtoupper(trim((string) ($_GET['os'] ?? '')));
+        $prest = trim((string) ($_GET['prestador'] ?? ''));
+        $tipo = trim((string) ($_GET['tipo'] ?? ''));
+        $osNom = trim((string) ($_GET['os_nom'] ?? ''));
+        $prestNom = trim((string) ($_GET['prest_nom'] ?? ''));
+        $fmt = static function (string $aamm): string {
+            return strlen($aamm) === 4 ? substr($aamm, 0, 2) . '/' . substr($aamm, 2, 2) : $aamm;
+        };
+        return [
+            'error'      => $error,
+            'desde'      => $dNorm,
+            'hasta'      => $hNorm,
+            'desde_fmt'  => $fmt($dNorm),
+            'hasta_fmt'  => $fmt($hNorm),
+            'os'         => $os,
+            'prestador'  => $prest,
+            'tipo'       => $tipo,
+            'os_lbl'     => $os !== '' ? trim($os . ' ' . $osNom) : 'Todas',
+            'prest_lbl'  => $prest !== '' ? trim($prest . ' ' . $prestNom) : 'Todos',
+            'tipo_lbl'   => $tipo !== '' ? $tipo : 'Todas',
+        ];
+    }
+
     // ══════════════════════════════════════════════════════════════════════
     //  HELPERS
     // ══════════════════════════════════════════════════════════════════════
@@ -789,6 +885,30 @@ class RegistrfController
             header('Location: ' . $this->baseUrl() . '?route=login');
             exit;
         }
+    }
+
+    private function requirePermisoListados(): void
+    {
+        $permisos = $_SESSION['permisos'] ?? [];
+        $ok = [
+            'MNU_CD_FAC_INGRESO',
+            'MNU_REG_FACTURAS',
+            'MNU_CD_FAC_LST_DET',
+            'MNU_CD_FAC_LST_TOT_AC',
+        ];
+        foreach ($permisos as $p) {
+            if (isset($p['CLAVE']) && in_array($p['CLAVE'], $ok, true)) {
+                return;
+            }
+        }
+        if ($this->isAjax()) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'error' => 'Sin permiso para esta operación.']);
+            exit;
+        }
+        $_SESSION['flash_warning'] = 'No tiene permiso para acceder al módulo solicitado.';
+        header('Location: ' . $this->baseUrl() . '?route=dashboard');
+        exit;
     }
 
     private function requirePermiso(string $clave): void

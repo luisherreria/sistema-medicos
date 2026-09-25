@@ -640,8 +640,8 @@ class Permission
                             [
                                 'type'=>'group','label'=>'Listados','icon'=>'fa-solid fa-list',
                                 'children' => [
-                                    ['type'=>'item','clave'=>'MNU_CD_FAC_LST_DET',    'label'=>'Detallado x OS'],
-                                    ['type'=>'item','clave'=>'MNU_CD_FAC_LST_TOT_AC', 'label'=>'Totales Acumulados x OS'],
+                                    ['type'=>'item','clave'=>'MNU_CD_FAC_LST_DET',    'label'=>'Listado Detallado de Registración'],
+                                    ['type'=>'item','clave'=>'MNU_CD_FAC_LST_TOT_AC', 'label'=>'Totales Acumulados por Obra Social'],
                                     ['type'=>'item','clave'=>'MNU_CD_FAC_LST_TOT_CMP','label'=>'Totales Comparados x OS'],
                                 ]
                             ],

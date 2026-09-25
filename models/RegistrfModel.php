@@ -495,4 +495,338 @@ class RegistrfModel
 
         return implode(', ', array_merge([$primary], $secondary));
     }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  LISTADOS (resu1-1 / resu1-2)
+    // ══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Convierte "26/07" o "2607" a AAMM. Vacío si no es período válido.
+     */
+    public function normalizarPeriodo(string $q): string
+    {
+        return $this->normalizarBusquedaPeriodo($q);
+    }
+
+    /** Expresión SQL que deja COPERIODO como AAMM (2607) aunque venga 26/07. */
+    private function exprPeriodoAamm(string $col): string
+    {
+        return "LPAD(REPLACE(REPLACE(REPLACE(TRIM({$col}), '/', ''), '-', ''), '.', ''), 4, '0')";
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    public function listarTiposPrestador(): array
+    {
+        $out = [];
+        $ebamp = $this->columnasEbamp();
+        if (!isset($ebamp['tipo'])) {
+            return $out;
+        }
+        try {
+            $stmt = $this->db->query(
+                "SELECT DISTINCT TRIM(tipo) AS tipo
+                 FROM ebamp
+                 WHERE TRIM(IFNULL(tipo,'')) <> ''
+                 ORDER BY tipo ASC"
+            );
+            foreach ($stmt as $row) {
+                $t = trim((string) ($row['tipo'] ?? ''));
+                if ($t !== '' && !in_array($t, $out, true)) {
+                    $out[] = $t;
+                }
+            }
+        } catch (PDOException $e) {
+            error_log('listarTiposPrestador: ' . $e->getMessage());
+        }
+        return $out;
+    }
+
+    /**
+     * Detallado x Obra Social (resu1-1).
+     *
+     * @param array{desde:string,hasta:string,os?:string,prestador?:string,tipo?:string} $f
+     * @return array<int,array<string,mixed>>
+     */
+    public function reporteDetalladoOs(array $f): array
+    {
+        $desde = $this->normalizarPeriodo((string) ($f['desde'] ?? ''));
+        $hasta = $this->normalizarPeriodo((string) ($f['hasta'] ?? ''));
+        if ($desde === '' || $hasta === '') {
+            return [];
+        }
+        if ($desde > $hasta) {
+            $tmp = $desde;
+            $desde = $hasta;
+            $hasta = $tmp;
+        }
+
+        $colPer = $this->col('COPERIODO');
+        $perExpr = $this->exprPeriodoAamm('r.' . $colPer);
+        $where = ["{$perExpr} BETWEEN :desde AND :hasta"];
+        $bind = [':desde' => $desde, ':hasta' => $hasta];
+
+        if ($this->tieneColumna('eliminado')) {
+            $colEli = $this->col('eliminado');
+            $where[] = "(r.{$colEli} = 0 OR r.{$colEli} IS NULL)";
+        }
+
+        $os = strtoupper(trim((string) ($f['os'] ?? '')));
+        if ($os !== '') {
+            $where[] = "TRIM(r.{$this->col('COOBRASOC')}) = :os";
+            $bind[':os'] = $os;
+        }
+
+        $prest = trim((string) ($f['prestador'] ?? ''));
+        if ($prest !== '') {
+            $where[] = "(TRIM(r.{$this->col('COPRESTADO')}) = :pr
+                OR TRIM(CAST(e.codigo AS CHAR)) = :pr2
+                OR TRIM(CAST(e.matricula AS CHAR)) = :pr3)";
+            $bind[':pr'] = $prest;
+            $bind[':pr2'] = $prest;
+            $bind[':pr3'] = $prest;
+        }
+
+        $tipo = trim((string) ($f['tipo'] ?? ''));
+        $tipoReg = $this->tieneColumna('COTIPOPRE')
+            ? 'TRIM(r.' . $this->col('COTIPOPRE') . ')'
+            : "''";
+        $tipoExpr = "TRIM(IFNULL(NULLIF({$tipoReg}, ''), IFNULL(e.tipo, '')))";
+        if ($tipo !== '') {
+            if (strtoupper($tipo) === 'CABECERA') {
+                $where[] = "(UPPER(LEFT({$tipoExpr}, 3)) = 'MED' OR UPPER({$tipoExpr}) = 'CABECERA')";
+            } else {
+                $where[] = "({$tipoExpr} = :tipo OR TRIM(IFNULL(e.tipo,'')) = :tipo2)";
+                $bind[':tipo'] = $tipo;
+                $bind[':tipo2'] = $tipo;
+            }
+        }
+
+        $fecFac = $this->tieneColumna('COFECFAC') ? 'r.' . $this->col('COFECFAC') : 'NULL';
+        $imp = $this->tieneColumna('COIMPFAC') ? 'r.' . $this->col('COIMPFAC') : '0';
+        $iva = $this->tieneColumna('COIVAFAC') ? 'r.' . $this->col('COIVAFAC') : '0';
+        $csg = $this->tieneColumna('COCSGFAC') ? 'r.' . $this->col('COCSGFAC') : '0';
+        $tot = $this->tieneColumna('COTOTALFAC') ? 'r.' . $this->col('COTOTALFAC') : '0';
+        $cant = $this->tieneColumna('COCANTIDAD') ? 'r.' . $this->col('COCANTIDAD') : '0';
+        $factura = $this->tieneColumna('COFACTURA') ? 'TRIM(r.' . $this->col('COFACTURA') . ')' : "''";
+        $nomObra = $this->tieneColumna('CONOMOBRA') ? 'TRIM(r.' . $this->col('CONOMOBRA') . ')' : "''";
+        $leyenda = $this->tieneColumna('COLEYENDA') ? 'TRIM(r.' . $this->col('COLEYENDA') . ')' : "''";
+        $ebamp = $this->columnasEbamp();
+        $subSel = isset($ebamp['subcateg']) ? 'TRIM(IFNULL(e.subcateg,\'\'))' : "''";
+        $zonaSel = isset($ebamp['zona']) ? 'TRIM(IFNULL(e.zona,\'\'))' : "''";
+        $nomEbamp = isset($ebamp['nombre']) ? 'TRIM(IFNULL(e.nombre,\'\'))' : "''";
+        $tipoEbamp = isset($ebamp['tipo']) ? 'TRIM(IFNULL(e.tipo,\'\'))' : "''";
+
+        $sql = "SELECT
+                    {$fecFac} AS cofecfac,
+                    TRIM(r.{$this->col('COSUCFAC')}) AS cosucfac,
+                    TRIM(r.{$this->col('CONROFAC')}) AS conrofac,
+                    TRIM(r.{$colPer}) AS coperiodo,
+                    TRIM(r.{$this->col('COOBRASOC')}) AS coobrasoc,
+                    {$nomObra} AS conomobra,
+                    TRIM(IFNULL(o.TADESCRIP, '')) AS os_nombre,
+                    TRIM(r.{$this->col('COPRESTADO')}) AS coprestado,
+                    TRIM(r.{$this->col('CONOMPREST')}) AS conomprest_reg,
+                    {$nomEbamp} AS nombre_ebamp,
+                    {$subSel} AS subcateg,
+                    {$zonaSel} AS zona,
+                    {$leyenda} AS coleyenda_reg,
+                    {$factura} AS cofactura,
+                    IFNULL({$cant}, 0) AS cocantidad,
+                    IFNULL({$imp}, 0) AS coimpfac,
+                    IFNULL({$iva}, 0) AS coivafac,
+                    IFNULL({$csg}, 0) AS cocsgfac,
+                    IFNULL({$tot}, 0) AS cototalfac,
+                    {$tipoReg} AS cotipopre,
+                    {$tipoEbamp} AS tipo_ebamp
+                FROM registrf r
+                LEFT JOIN ebamp e
+                    ON TRIM(r.{$this->col('COPRESTADO')}) = TRIM(CAST(e.matricula AS CHAR))
+                    OR TRIM(r.{$this->col('COPRESTADO')}) = TRIM(CAST(e.codigo AS CHAR))
+                LEFT JOIN obrasoc o
+                    ON TRIM(r.{$this->col('COOBRASOC')}) = TRIM(o.TACODIGO)
+                WHERE " . implode(' AND ', $where) . "
+                ORDER BY {$subSel} ASC, r.{$this->col('COOBRASOC')} ASC,
+                         r.{$this->col('CONOMPREST')} ASC, {$fecFac} ASC";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($bind);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        foreach ($rows as &$r) {
+            $nombre = trim((string) ($r['nombre_ebamp'] ?? ''));
+            if ($nombre === '') {
+                $nombre = trim((string) ($r['conomprest_reg'] ?? ''));
+            }
+            $r['conomprest'] = $nombre;
+
+            $sub = strtoupper(trim((string) ($r['subcateg'] ?? '')));
+            $r['subcateg'] = $sub !== '' ? $sub : 'SIN SUBCATEGORIA';
+
+            $zona = trim((string) ($r['zona'] ?? ''));
+            $r['coleyenda'] = $zona !== '' ? $zona : trim((string) ($r['coleyenda_reg'] ?? ''));
+
+            $tipoRaw = trim((string) ($r['cotipopre'] ?? ''));
+            if ($tipoRaw === '') {
+                $tipoRaw = trim((string) ($r['tipo_ebamp'] ?? ''));
+            }
+            if (strncasecmp($tipoRaw, 'MED', 3) === 0) {
+                $tipoRaw = 'Cabecera';
+            }
+            $r['cotipopre'] = $tipoRaw;
+
+            $r['cocantcalc'] = (float) ($r['cocantidad'] ?? 0);
+            $r['copesos']    = (float) ($r['cototalfac'] ?? 0);
+            $r['coimpfac']   = (float) ($r['coimpfac'] ?? 0);
+            $r['coivafac']   = (float) ($r['coivafac'] ?? 0);
+            $r['cocsgfac']   = (float) ($r['cocsgfac'] ?? 0);
+            $r['cototalfac'] = (float) ($r['cototalfac'] ?? 0);
+
+            $osNom = trim((string) ($r['os_nombre'] ?? ''));
+            if ($osNom === '') {
+                $osNom = trim((string) ($r['conomobra'] ?? ''));
+            }
+            $r['os_nombre'] = $osNom;
+        }
+        unset($r);
+
+        return $rows;
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $filas
+     * @return array<string,array<string,mixed>>
+     */
+    public function agruparDetalladoPorSubgrupo(array $filas): array
+    {
+        $out = [];
+        foreach ($filas as $r) {
+            $key = (string) ($r['subcateg'] ?? 'SIN SUBCATEGORIA');
+            if (!isset($out[$key])) {
+                $out[$key] = [
+                    'nombre'    => $key,
+                    'filas'     => [],
+                    'cantidad'  => 0.0,
+                    'importe'   => 0.0,
+                    'iva'       => 0.0,
+                    'coseguro'  => 0.0,
+                    'total'     => 0.0,
+                    'consultas' => 0.0,
+                    'pesos'     => 0.0,
+                ];
+            }
+            $out[$key]['filas'][] = $r;
+            $out[$key]['cantidad']  += (float) $r['cocantcalc'];
+            $out[$key]['importe']   += (float) $r['coimpfac'];
+            $out[$key]['iva']       += (float) $r['coivafac'];
+            $out[$key]['coseguro']  += (float) $r['cocsgfac'];
+            $out[$key]['total']     += (float) $r['cototalfac'];
+            $out[$key]['consultas'] += (float) $r['cocantcalc'];
+            $out[$key]['pesos']     += (float) $r['copesos'];
+        }
+        return $out;
+    }
+
+    /**
+     * Totales acumulados x OS (resu1-2).
+     *
+     * @param array{desde:string,hasta:string,os?:string,prestador?:string,tipo?:string} $f
+     * @return array{obras:array<int,array<string,mixed>>,total:array<string,float>}
+     */
+    public function reporteTotalesAcumOs(array $f): array
+    {
+        $filas = $this->reporteDetalladoOs($f);
+        $obras = [];
+        foreach ($filas as $r) {
+            $os = trim((string) ($r['coobrasoc'] ?? ''));
+            if ($os === '') {
+                $os = 'S/OS';
+            }
+            if (!isset($obras[$os])) {
+                $obras[$os] = [
+                    'codigo'    => $os,
+                    'nombre'    => (string) ($r['os_nombre'] ?? ''),
+                    'subs'      => [],
+                    'cantidad'  => 0.0,
+                    'total'     => 0.0,
+                    'consultas' => 0.0,
+                    'importe'   => 0.0,
+                ];
+            }
+            $sub = (string) ($r['subcateg'] ?? 'SIN SUBCATEGORIA');
+            if (!isset($obras[$os]['subs'][$sub])) {
+                $obras[$os]['subs'][$sub] = [
+                    'subcateg'  => $sub,
+                    'cantidad'  => 0.0,
+                    'total'     => 0.0,
+                    'consultas' => 0.0,
+                    'importe'   => 0.0,
+                ];
+            }
+            $cant = (float) $r['cocantcalc'];
+            $cons = $this->subcategSumaConsultas($sub) ? $cant : 0.0;
+            $tot  = (float) $r['copesos'];
+            $imp  = (float) $r['coimpfac'];
+
+            $obras[$os]['subs'][$sub]['cantidad']  += $cant;
+            $obras[$os]['subs'][$sub]['total']     += $tot;
+            $obras[$os]['subs'][$sub]['consultas'] += $cons;
+            $obras[$os]['subs'][$sub]['importe']   += $imp;
+
+            $obras[$os]['cantidad']  += $cant;
+            $obras[$os]['total']     += $tot;
+            $obras[$os]['consultas'] += $cons;
+            $obras[$os]['importe']   += $imp;
+        }
+
+        $lista = array_values($obras);
+        foreach ($lista as &$osRow) {
+            $osRow['subs'] = array_values($osRow['subs']);
+            $osRow['cons_vestida'] = $osRow['consultas'] > 0
+                ? $osRow['total'] / $osRow['consultas']
+                : 0.0;
+        }
+        unset($osRow);
+
+        $total = [
+            'cantidad'  => 0.0,
+            'total'     => 0.0,
+            'consultas' => 0.0,
+            'importe'   => 0.0,
+        ];
+        foreach ($lista as $osRow) {
+            $total['cantidad']  += $osRow['cantidad'];
+            $total['total']     += $osRow['total'];
+            $total['consultas'] += $osRow['consultas'];
+            $total['importe']   += $osRow['importe'];
+        }
+        $total['cons_vestida'] = $total['consultas'] > 0
+            ? $total['total'] / $total['consultas']
+            : 0.0;
+
+        return ['obras' => $lista, 'total' => $total];
+    }
+
+    private function subcategSumaConsultas(string $sub): bool
+    {
+        $u = strtoupper(trim($sub));
+        $ok = [
+            'CABECERA',
+            'ESPECIALIZADOS',
+            'ESPECIALISTAS',
+            'MAS DE UNA ESPECIALIDAD',
+            'UNIVALENTE/ESPECIALIZADOS',
+            'UNIVALENTE/ESPECIALI',
+        ];
+        foreach ($ok as $k) {
+            if ($u === $k || strpos($u, $k) === 0 || strpos($k, $u) === 0) {
+                return true;
+            }
+        }
+        return false;
+    }
 }
