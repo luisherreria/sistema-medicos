@@ -498,15 +498,91 @@ tailwind.config = { corePlugins: { preflight: false } };
         totales:   'Totales Acumulados x Obra Social'
     };
 
-    function rfNormPeriodoInput(el) {
-        var v = String(el.value || '').replace(/[^0-9]/g, '');
-        if (v.length >= 4) {
-            el.value = v.substring(0, 2) + '/' + v.substring(2, 4);
+    function rfSelectPeriodo(el) {
+        if (typeof window.rfSelectPeriodo === 'function' && window.rfSelectPeriodo !== rfSelectPeriodo) {
+            window.rfSelectPeriodo(el);
+            return;
+        }
+        try { el.select(); } catch (eSel) {}
+    }
+
+    function rfMaskPeriodoLive(el, ev) {
+        if (typeof window.rfMaskPeriodoLive === 'function' && window.rfMaskPeriodoLive !== rfMaskPeriodoLive) {
+            window.rfMaskPeriodoLive(el, ev);
+            return;
+        }
+        var tipo = (ev && ev.inputType) ? ev.inputType : '';
+        var v = String(el.value || '').replace(/[^\d/]/g, '');
+        if (tipo.indexOf('delete') === 0 || tipo === 'deleteByCut') {
+            if (el.value !== v.substring(0, 5)) {
+                el.value = v.substring(0, 5);
+            }
+            return;
+        }
+        if (/^\d{2}\/\d{0,2}$/.test(v)) {
+            if (el.value !== v.substring(0, 5)) {
+                el.value = v.substring(0, 5);
+            }
+            return;
+        }
+        var d = v.replace(/\D/g, '').substring(0, 4);
+        var next = (d.length > 2) ? (d.substring(0, 2) + '/' + d.substring(2)) : d;
+        if (el.value !== next) {
+            el.value = next;
         }
     }
 
+    function rfNormPeriodoInput(el) {
+        if (typeof window.rfNormPeriodoInput === 'function' && window.rfNormPeriodoInput !== rfNormPeriodoInput) {
+            return window.rfNormPeriodoInput(el);
+        }
+        var d = String(el.value || '').replace(/\D/g, '').substring(0, 4);
+        if (d.length === 0) {
+            el.value = '';
+            el.classList.remove('is-invalid');
+            return false;
+        }
+        if (d.length === 4) {
+            var mm = parseInt(d.substring(2, 4), 10);
+            if (mm >= 1 && mm <= 12) {
+                el.value = d.substring(0, 2) + '/' + ('0' + mm).slice(-2);
+                el.classList.remove('is-invalid');
+                return true;
+            }
+            el.value = d.substring(0, 2) + '/' + d.substring(2, 4);
+            el.classList.add('is-invalid');
+            return false;
+        }
+        if (d.length > 2) {
+            el.value = d.substring(0, 2) + '/' + d.substring(2);
+        } else {
+            el.value = d;
+        }
+        el.classList.add('is-invalid');
+        return false;
+    }
+
     function rfPeriodoValido(v) {
-        return /^\d{2}\/\d{2}$/.test(String(v || '').trim());
+        var m = String(v || '').trim().match(/^(\d{2})\/(\d{2})$/);
+        if (!m) {
+            return false;
+        }
+        var mm = parseInt(m[2], 10);
+        return mm >= 1 && mm <= 12;
+    }
+
+    function rfPeriodoMsgError(desde, hasta) {
+        var re = /^(\d{2})\/(\d{2})$/;
+        var md = String(desde || '').trim().match(re);
+        var mh = String(hasta || '').trim().match(re);
+        if (md && mh) {
+            var m1 = parseInt(md[2], 10);
+            var m2 = parseInt(mh[2], 10);
+            if (m1 < 1 || m1 > 12 || m2 < 1 || m2 > 12) {
+                return 'El mes (MM) debe estar entre 01 y 12.';
+            }
+        }
+        return 'Completá Desde y Hasta en formato AA/MM (ej: 26/07).';
     }
 
     function rfAbrirModalListado(tipo) {
@@ -533,9 +609,27 @@ tailwind.config = { corePlugins: { preflight: false } };
     ['rf-lst-desde', 'rf-lst-hasta'].forEach(function (id) {
         var $el = document.getElementById(id);
         if (!$el) return;
-        $el.addEventListener('blur', function () { rfNormPeriodoInput(this); });
+        if ($el.getAttribute('data-rf-periodo-bound') !== '1') {
+            $el.addEventListener('focus', function () {
+                var self = this;
+                setTimeout(function () { rfSelectPeriodo(self); }, 0);
+            });
+            $el.addEventListener('click', function () {
+                rfSelectPeriodo(this);
+            });
+            $el.addEventListener('mouseup', function (e) {
+                e.preventDefault();
+                rfSelectPeriodo(this);
+            });
+            $el.addEventListener('input', function (e) { rfMaskPeriodoLive(this, e); });
+            $el.addEventListener('blur', function () { rfNormPeriodoInput(this); });
+            $el.setAttribute('data-rf-periodo-bound', '1');
+        }
         $el.addEventListener('keydown', function (e) {
-            if (e.which === 13) {
+            if (e.which === 8 || e.which === 46 || e.key === 'Backspace' || e.key === 'Delete') {
+                return;
+            }
+            if (e.which === 13 || e.key === 'Enter') {
                 e.preventDefault();
                 rfNormPeriodoInput(this);
                 document.getElementById(id === 'rf-lst-desde' ? 'rf-lst-hasta' : 'rf-lst-os').focus();
@@ -605,7 +699,7 @@ tailwind.config = { corePlugins: { preflight: false } };
         var hasta = document.getElementById('rf-lst-hasta').value.trim();
         var $err = document.getElementById('rf-lst-err');
         if (!rfPeriodoValido(desde) || !rfPeriodoValido(hasta)) {
-            $err.textContent = 'Completá Desde y Hasta en formato AA/MM (ej: 26/07).';
+            $err.textContent = rfPeriodoMsgError(desde, hasta);
             $err.classList.remove('d-none');
             return;
         }

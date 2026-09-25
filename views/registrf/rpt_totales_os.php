@@ -23,8 +23,8 @@ header('Content-Type: text/html; charset=utf-8');
     </style>
 </head>
 <body>
-<button class="no-print" type="button" onclick="window.print()">Imprimir</button>
-<button class="no-print" type="button" onclick="window.close()">Cerrar</button>
+<?php rfRptToolbar('totales-acumulados-os', 'portrait'); ?>
+<div id="rf-rpt-export">
 <?php rfRptCabecera($titulo, $filtros); ?>
 
 <?php if (!$obras): ?>
@@ -86,5 +86,7 @@ header('Content-Type: text/html; charset=utf-8');
         </tbody>
     </table>
 <?php endif; ?>
+</div>
+<?php rfRptScripts(); ?>
 </body>
 </html>

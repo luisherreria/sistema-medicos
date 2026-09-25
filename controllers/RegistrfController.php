@@ -555,6 +555,11 @@ class RegistrfController
         }
 
         $titulo = 'Detallado x Obra Social';
+        $format = $this->formatoExportacion();
+        if ($format !== '') {
+            $this->exportarListado($format, 'detallado', $titulo, $filtros, $grupos, []);
+            return;
+        }
         require __DIR__ . '/../views/registrf/rpt_detallado_os.php';
         exit;
     }
@@ -584,6 +589,11 @@ class RegistrfController
         }
 
         $titulo = 'Totales Acumulados x Obra Social';
+        $format = $this->formatoExportacion();
+        if ($format !== '') {
+            $this->exportarListado($format, 'totales', $titulo, $filtros, $obras, $total);
+            return;
+        }
         require __DIR__ . '/../views/registrf/rpt_totales_os.php';
         exit;
     }
@@ -624,6 +634,31 @@ class RegistrfController
             'prest_lbl'  => $prest !== '' ? trim($prest . ' ' . $prestNom) : 'Todos',
             'tipo_lbl'   => $tipo !== '' ? $tipo : 'Todas',
         ];
+    }
+
+    private function formatoExportacion(): string
+    {
+        $f = strtolower(trim((string) ($_GET['format'] ?? '')));
+        return ($f === 'pdf' || $f === 'xlsx') ? $f : '';
+    }
+
+    /**
+     * @param array<string,mixed> $filtros
+     * @param array<int|string,mixed> $datos
+     * @param array<string,mixed> $total
+     */
+    private function exportarListado(string $format, string $tipo, string $titulo, array $filtros, array $datos, array $total): void
+    {
+        require_once __DIR__ . '/../includes/RfRptExport.php';
+        try {
+            if ($tipo === 'totales') {
+                RfRptExport::totales($titulo, $filtros, $datos, $total, $format);
+            } else {
+                RfRptExport::detallado($titulo, $filtros, $datos, $format);
+            }
+        } catch (Exception $e) {
+            $this->rptError('Error al exportar el listado: ' . $e->getMessage());
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════

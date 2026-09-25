@@ -29,14 +29,16 @@ try {
                 <div class="row g-2">
                     <div class="col-6">
                         <label class="form-label mb-0" style="font-size:.75rem;color:#64748b;">Desde (AA/MM)</label>
-                        <input type="text" id="rf-lst-desde" class="form-control form-control-sm text-center"
-                               maxlength="5" placeholder="26/07" value="<?= htmlspecialchars($rfPeriodoDef) ?>"
+                        <input type="text" id="rf-lst-desde" class="form-control form-control-sm text-center rf-periodo"
+                               maxlength="5" placeholder="26/07" inputmode="numeric" autocomplete="off"
+                               value="<?= htmlspecialchars($rfPeriodoDef) ?>"
                                style="font-family:monospace;letter-spacing:1px;">
                     </div>
                     <div class="col-6">
                         <label class="form-label mb-0" style="font-size:.75rem;color:#64748b;">Hasta (AA/MM)</label>
-                        <input type="text" id="rf-lst-hasta" class="form-control form-control-sm text-center"
-                               maxlength="5" placeholder="26/07" value="<?= htmlspecialchars($rfPeriodoDef) ?>"
+                        <input type="text" id="rf-lst-hasta" class="form-control form-control-sm text-center rf-periodo"
+                               maxlength="5" placeholder="26/07" inputmode="numeric" autocomplete="off"
+                               value="<?= htmlspecialchars($rfPeriodoDef) ?>"
                                style="font-family:monospace;letter-spacing:1px;">
                     </div>
                     <div class="col-12">
@@ -83,3 +85,100 @@ try {
         </div>
     </div>
 </div>
+<script>
+(function () {
+    if (window.__rfPeriodoUx) {
+        return;
+    }
+    window.__rfPeriodoUx = true;
+
+    function rfSelectPeriodo(el) {
+        try { el.select(); } catch (eSel) {}
+    }
+
+    function rfMaskPeriodoLive(el, ev) {
+        var tipo = (ev && ev.inputType) ? ev.inputType : '';
+        var v = String(el.value || '').replace(/[^\d/]/g, '');
+        if (tipo.indexOf('delete') === 0 || tipo === 'deleteByCut' || tipo === 'historyUndo' || tipo === 'historyRedo') {
+            if (el.value !== v.substring(0, 5)) {
+                el.value = v.substring(0, 5);
+            }
+            return;
+        }
+        if (/^\d{2}\/\d{0,2}$/.test(v)) {
+            if (el.value !== v.substring(0, 5)) {
+                el.value = v.substring(0, 5);
+            }
+            return;
+        }
+        var d = v.replace(/\D/g, '').substring(0, 4);
+        var next = (d.length > 2) ? (d.substring(0, 2) + '/' + d.substring(2)) : d;
+        if (el.value !== next) {
+            el.value = next;
+        }
+    }
+
+    function rfNormPeriodoInput(el) {
+        var d = String(el.value || '').replace(/\D/g, '').substring(0, 4);
+        if (d.length === 0) {
+            el.value = '';
+            el.classList.remove('is-invalid');
+            return false;
+        }
+        if (d.length === 4) {
+            var mm = parseInt(d.substring(2, 4), 10);
+            if (mm >= 1 && mm <= 12) {
+                el.value = d.substring(0, 2) + '/' + ('0' + mm).slice(-2);
+                el.classList.remove('is-invalid');
+                return true;
+            }
+            el.value = d.substring(0, 2) + '/' + d.substring(2, 4);
+            el.classList.add('is-invalid');
+            return false;
+        }
+        if (d.length > 2) {
+            el.value = d.substring(0, 2) + '/' + d.substring(2);
+        } else {
+            el.value = d;
+        }
+        el.classList.add('is-invalid');
+        return false;
+    }
+
+    window.rfSelectPeriodo = rfSelectPeriodo;
+    window.rfMaskPeriodoLive = rfMaskPeriodoLive;
+    window.rfNormPeriodoInput = rfNormPeriodoInput;
+
+    function bindPeriodo(el) {
+        if (!el || el.getAttribute('data-rf-periodo-bound') === '1') {
+            return;
+        }
+        el.setAttribute('data-rf-periodo-bound', '1');
+        el.addEventListener('focus', function () {
+            var self = this;
+            setTimeout(function () { rfSelectPeriodo(self); }, 0);
+        });
+        el.addEventListener('click', function () {
+            rfSelectPeriodo(this);
+        });
+        el.addEventListener('mouseup', function (e) {
+            e.preventDefault();
+            rfSelectPeriodo(this);
+        });
+        el.addEventListener('input', function (e) {
+            rfMaskPeriodoLive(this, e);
+        });
+        el.addEventListener('blur', function () {
+            rfNormPeriodoInput(this);
+        });
+        el.addEventListener('keydown', function (e) {
+            var k = e.key || '';
+            if (k === 'Backspace' || k === 'Delete' || e.which === 8 || e.which === 46) {
+                return;
+            }
+        });
+    }
+
+    document.querySelectorAll('.rf-periodo, #rf-lst-desde, #rf-lst-hasta').forEach(bindPeriodo);
+})();
+</script>

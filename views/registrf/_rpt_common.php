@@ -79,10 +79,52 @@ function rfRptEstilos(): void
         .tot-gral td{background:#dbeafe !important;font-weight:700;border-top:2px solid #1d4ed8;}
         .empty{padding:28px;text-align:center;color:#64748b;}
         .no-print{margin-bottom:10px;}
+        .rpt-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;}
+        .rpt-toolbar button,.rpt-toolbar a.rpt-btn{
+            padding:6px 12px;font-size:12px;border-radius:6px;cursor:pointer;
+            border:1px solid #94a3b8;background:#fff;color:#0f172a;
+            text-decoration:none;display:inline-block;line-height:1.3;box-sizing:border-box;
+        }
+        .rpt-toolbar button.rpt-btn-pri,.rpt-toolbar a.rpt-btn-pri{background:#0d47a1;border-color:#0d47a1;color:#fff;}
+        .rpt-toolbar button.rpt-btn-ok,.rpt-toolbar a.rpt-btn-ok{background:#15803d;border-color:#15803d;color:#fff;}
+        .rpt-toolbar form{display:inline;margin:0;}
         @media print{
             .no-print{display:none;}
             body{margin:8px;}
             @page{size:landscape;margin:10mm;}
         }
     </style>';
+}
+
+function rfRptAssetBase(): string
+{
+    $script = isset($_SERVER['SCRIPT_NAME']) ? str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])) : '';
+    return rtrim($script, '/');
+}
+
+function rfRptExportUrl(string $format): string
+{
+    $qs = $_GET;
+    $qs['format'] = $format;
+    $script = isset($_SERVER['SCRIPT_NAME']) ? str_replace('\\', '/', (string) $_SERVER['SCRIPT_NAME']) : 'index.php';
+    if ($script === '' || $script === '/') {
+        $script = 'index.php';
+    }
+    return $script . '?' . http_build_query($qs);
+}
+
+function rfRptToolbar(string $nombreArchivo, string $orientacion = 'landscape'): void
+{
+    $pdfUrl = htmlspecialchars(rfRptExportUrl('pdf'), ENT_QUOTES, 'UTF-8');
+    $xlsUrl = htmlspecialchars(rfRptExportUrl('xlsx'), ENT_QUOTES, 'UTF-8');
+    echo '<div class="no-print rpt-toolbar">';
+    echo '<button type="button" class="rpt-btn-pri" onclick="window.print()">Imprimir</button>';
+    echo '<button type="button" onclick="window.open(\'' . $pdfUrl . '\',\'_blank\')">PDF</button>';
+    echo '<a class="rpt-btn rpt-btn-ok" href="' . $xlsUrl . '" target="_blank" rel="noopener">Excel</a>';
+    echo '<button type="button" onclick="window.close()">Cerrar</button>';
+    echo '</div>';
+}
+
+function rfRptScripts(): void
+{
 }

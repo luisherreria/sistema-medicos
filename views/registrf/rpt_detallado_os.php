@@ -17,8 +17,8 @@ header('Content-Type: text/html; charset=utf-8');
     <?php rfRptEstilos(); ?>
 </head>
 <body>
-<button class="no-print" type="button" onclick="window.print()">Imprimir</button>
-<button class="no-print" type="button" onclick="window.close()">Cerrar</button>
+<?php rfRptToolbar('detallado-os', 'landscape'); ?>
+<div id="rf-rpt-export">
 <?php rfRptCabecera($titulo, $filtros); ?>
 
 <?php if (!$grupos): ?>
@@ -88,5 +88,7 @@ header('Content-Type: text/html; charset=utf-8');
         </table>
     <?php endforeach; ?>
 <?php endif; ?>
+</div>
+<?php rfRptScripts(); ?>
 </body>
 </html>
