@@ -21,7 +21,7 @@ class FacturasTempModel
      * Inserta una factura extraída del PDF.
      * COPRESTADO se completa si el OCR matcheó CUIT en ebamp.
      * O_SOCIAL (COOBRASOC) va vacío.
-     * PERIODO (COPERIODO) llega en AA/MM si el OCR lo detectó.
+     * PERIODO (COPERIODO) siempre es el mes anterior (DateHelper).
      *
      * @param array $datos
      * @return int
@@ -49,10 +49,7 @@ class FacturasTempModel
         $codPr   = isset($datos['cod_prest']) ? $datos['cod_prest'] : '';
         $suc     = isset($datos['sucursal']) ? $datos['sucursal'] : '';
         $nro     = isset($datos['nro_factura']) ? $datos['nro_factura'] : '';
-        $periodo = isset($datos['periodo']) ? $datos['periodo'] : '';
-        if ($periodo === '') {
-            $periodo = DateHelper::getPeriodoAnterior();
-        }
+        $periodo = DateHelper::getPeriodoAnterior();
 
         $stmt = $this->db->prepare($sql);
         $stmt->execute(array(
@@ -126,13 +123,7 @@ class FacturasTempModel
                     $fecha = $existe['COFECFAC'];
                 }
 
-                $periodo = isset($datos['periodo']) ? trim($datos['periodo']) : '';
-                if ($periodo === '' && isset($existe['COPERIODO'])) {
-                    $periodo = $existe['COPERIODO'];
-                }
-                if ($periodo === '') {
-                    $periodo = DateHelper::getPeriodoAnterior();
-                }
+                $periodo = DateHelper::getPeriodoAnterior();
 
                 $stmtUpd = $this->db->prepare(
                     "UPDATE t_facturas_temp

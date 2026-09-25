@@ -54,7 +54,7 @@ tailwind.config = { corePlugins: { preflight: false } };
             <input type="text" id="rf-busqueda"
                    class="form-control form-control-sm"
                    style="font-size:.78rem;"
-                   placeholder="Prestador, N° Factura u Obra Social…">
+                   placeholder="Período (26/07), Prestador, N° Factura u Obra Social…">
             <button id="rf-btn-buscar"
                     class="btn btn-sm btn-primary flex-shrink-0"
                     style="font-size:.75rem;padding:4px 10px;">

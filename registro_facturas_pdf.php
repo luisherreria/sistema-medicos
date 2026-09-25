@@ -63,14 +63,16 @@ require_once dirname(__FILE__) . '/views/layouts/header.php';
 <!-- FIN ZONA DE CARGA DROPZONE -->
 
 <div class="rfp-grid-wrap">
-    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-        <label class="mb-0 text-muted" style="font-size:.78rem;" for="rfp-os-select">Obra Social</label>
-        <select id="rfp-os-select" class="form-select form-select-sm" style="width:180px;font-size:.78rem;">
-            <option value="">Seleccionar TACODIGO…</option>
+    <div id="rfp-os-toolbar" class="rfp-os-toolbar">
+        <label class="mb-0 text-muted" style="font-size:.78rem;" for="rfp-os-input">Obra Social</label>
+        <input type="text" id="rfp-os-input" class="form-control form-control-sm"
+               list="rfp-os-datalist" autocomplete="off" placeholder="Código OS…"
+               style="width:140px;font-size:.78rem;height:30px;">
+        <datalist id="rfp-os-datalist">
             <?php foreach ($osCodigos as $osCod): ?>
-                <option value="<?= htmlspecialchars($osCod, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($osCod, ENT_QUOTES, 'UTF-8') ?></option>
+                <option value="<?= htmlspecialchars($osCod, ENT_QUOTES, 'UTF-8') ?>"></option>
             <?php endforeach; ?>
-        </select>
+        </datalist>
         <button type="button" id="rfp-btn-aplicar-os" class="btn btn-sm btn-outline-primary" style="font-size:.78rem;">
             Aplicar OS
         </button>
@@ -139,6 +141,25 @@ require_once dirname(__FILE__) . '/views/layouts/header.php';
     align-items: center;
     gap: 14px;
     margin: 0;
+}
+#tabla-facturas_wrapper .dataTables_filter {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 0;
+}
+#tabla-facturas_wrapper .dataTables_filter > label {
+    margin-bottom: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.rfp-os-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 #rfp-btn-confirmar,
 #rfp-btn-borrar { white-space: nowrap; }
@@ -359,6 +380,11 @@ window.formatearImporteVisual = formatearImporteVisual;
         $len.append($jq('#rfp-btn-confirmar'));
         $len.append($jq('#rfp-btn-borrar'));
         $len.parent().addClass('d-flex justify-content-center align-items-center');
+    }
+
+    var $filter = $jq('#tabla-facturas_wrapper .dataTables_filter');
+    if ($filter.length) {
+        $filter.prepend($jq('#rfp-os-toolbar'));
     }
 
     var rfpTarget = { id: null, tipo: '' };
@@ -789,6 +815,12 @@ window.formatearImporteVisual = formatearImporteVisual;
 
     $jq('#resultadosObraSoc').on('click', 'tr.rfp-res-obrasoc', function () {
         var codigo = $jq(this).attr('data-codigo') || '';
+        if (rfpTarget.tipo === 'obrasoc-masivo') {
+            $jq('#rfp-os-input').val(codigo);
+            rfpCerrarModal('modalBusquedaObraSoc');
+            rfpAplicarOsAFilas(codigo, true);
+            return;
+        }
         var $tr = rfpFilaPorId(rfpTarget.id);
         if (!$tr.length) {
             return;
@@ -826,21 +858,58 @@ window.formatearImporteVisual = formatearImporteVisual;
         });
     }
 
-    $jq('#rfp-btn-aplicar-os').on('click', function () {
-        var os = $jq.trim($jq('#rfp-os-select').val() || '');
+    function rfpAplicarOsAFilas(os, avisarSiVacio) {
+        os = $jq.trim(os || '');
         if (os === '') {
-            alert('Seleccioná una obra social (TACODIGO).');
-            return;
+            return 0;
         }
         var n = 0;
         $jq(dt.rows().nodes()).find('.rfp-check:checked').each(function () {
             $jq(this).closest('tr').find('.inp-os, .edit-obrasoc').val(os);
             n++;
         });
-        if (!n) {
+        if (!n && avisarSiVacio) {
             alert('Marcá al menos una fila para aplicar la obra social.');
+        }
+        return n;
+    }
+
+    function rfpResolverOsMasivo() {
+        var os = $jq.trim($jq('#rfp-os-input').val() || '');
+        rfpTarget.id = null;
+        rfpTarget.tipo = 'obrasoc-masivo';
+        if (os === '') {
+            rfpBuscarObraSocModal('');
             return;
         }
+        rfpAjaxBusqueda('obrasoc', os, 'validar', function (res) {
+            if (res.ok && res.existe) {
+                if (res.tacodigo) {
+                    $jq('#rfp-os-input').val(res.tacodigo);
+                    os = res.tacodigo;
+                }
+                rfpAplicarOsAFilas(os, true);
+                return;
+            }
+            rfpBuscarObraSocModal(os);
+        });
+    }
+
+    $jq('#rfp-os-input').on('input', function () {
+        $jq(this).val($jq(this).val().toUpperCase());
+    });
+
+    $jq('#rfp-os-input').on('keydown', function (e) {
+        if (e.which !== 13) {
+            return;
+        }
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        rfpResolverOsMasivo();
+    });
+
+    $jq('#rfp-btn-aplicar-os').on('click', function () {
+        rfpResolverOsMasivo();
     });
 
     $jq(document).on('click', '#tabla-facturas .rfp-btn-duplicar', function () {

@@ -63,7 +63,8 @@ class FacturaPdfParser
             'sucursal'        => $sucNro['sucursal'],
             'nro_comprobante' => $sucNro['numero'],
             'importe'         => $importe,
-            'periodo'         => $this->normalizarPeriodo($norm),
+            // Período OCR desactivado: la carga temporal usa DateHelper::getPeriodoAnterior().
+            'periodo'         => '',
             'cuit'            => $cuit,
             'obra_social'     => $this->extraerObraSocial($norm),
             'encabezado'      => $this->textoCabecera($norm),

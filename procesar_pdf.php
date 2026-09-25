@@ -252,28 +252,8 @@ try {
         $sucursal = $mSuc[1];
     }
 
-    // ── Período: mes en texto o numérico → AA/MM ──────────────────────────
-    $periodo = '';
-    $meses = array(
-        'ENERO' => '01', 'FEBRERO' => '02', 'MARZO' => '03', 'ABRIL' => '04',
-        'MAYO' => '05', 'JUNIO' => '06', 'JULIO' => '07', 'AGOSTO' => '08',
-        'SEPTIEMBRE' => '09', 'OCTUBRE' => '10', 'NOVIEMBRE' => '11', 'DICIEMBRE' => '12',
-    );
-    if (preg_match('/(ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SEPTIEMBRE|OCTUBRE|NOVIEMBRE|DICIEMBRE)[\s\del]+(20\d{2})/i', $texto, $matches)) {
-        $mes_texto = strtoupper($matches[1]);
-        if (isset($meses[$mes_texto])) {
-            $mes = $meses[$mes_texto];
-            $anio_corto = substr($matches[2], -2);
-            $periodo = $anio_corto . '/' . $mes;
-        }
-    } elseif (preg_match('/(?:per[ií]odo|mes)[\s:]*(0[1-9]|1[0-2])[\/\-](20\d{2})/i', $texto, $matches)) {
-        $mes = $matches[1];
-        $anio_corto = substr($matches[2], -2);
-        $periodo = $anio_corto . '/' . $mes;
-    }
-    if ($periodo === '') {
-        $periodo = DateHelper::getPeriodoAnterior();
-    }
+    // Período: siempre mes anterior (se ignora lo que diga el OCR).
+    $periodo = DateHelper::getPeriodoAnterior();
 
     // ── Validación de seguridad (Freno a filas fantasmas) ─────────────────
     if (empty($prestador) && empty($nro_factura) && $importe == 0.00) {

@@ -371,15 +371,47 @@ class RegistrfModel
 
         if ($busqueda !== '') {
             $val = '%' . $busqueda . '%';
-            $filtros[] = "({$this->col('CONOMPREST')} LIKE :b1"
+            $colPer = $this->col('COPERIODO');
+            $or = "({$this->col('CONOMPREST')} LIKE :b1"
                 . " OR {$this->col('CONROFAC')} LIKE :b2"
                 . " OR {$this->col('COOBRASOC')} LIKE :b3"
-                . " OR {$this->col('COPRESTADO')} LIKE :b4)";
-            $params = [':b1' => $val, ':b2' => $val, ':b3' => $val, ':b4' => $val];
+                . " OR {$this->col('COPRESTADO')} LIKE :b4"
+                . " OR {$colPer} LIKE :b5";
+            $params = [':b1' => $val, ':b2' => $val, ':b3' => $val, ':b4' => $val, ':b5' => $val];
+
+            $periodoNorm = $this->normalizarBusquedaPeriodo($busqueda);
+            if ($periodoNorm !== '') {
+                $or .= " OR REPLACE(REPLACE(REPLACE(TRIM({$colPer}), '/', ''), '-', ''), '.', '') = :bper";
+                $params[':bper'] = $periodoNorm;
+            }
+            $or .= ')';
+            $filtros[] = $or;
         }
 
         $where = $filtros ? (' WHERE ' . implode(' AND ', $filtros)) : '';
         return [$where, $params];
+    }
+
+    /**
+     * Convierte "26/07", "26-07", "26.07" o "2607" a AAMM ("2607").
+     * Si no parece un período, devuelve cadena vacía.
+     */
+    private function normalizarBusquedaPeriodo(string $q): string
+    {
+        $q = trim($q);
+        if (preg_match('/^(\d{2})[\/\-\.\s]+(\d{1,2})$/', $q, $m)) {
+            $mm = str_pad($m[2], 2, '0', STR_PAD_LEFT);
+            if ((int) $mm >= 1 && (int) $mm <= 12) {
+                return $m[1] . $mm;
+            }
+        }
+        if (preg_match('/^\d{4}$/', $q)) {
+            $mm = (int) substr($q, 2, 2);
+            if ($mm >= 1 && $mm <= 12) {
+                return $q;
+            }
+        }
+        return '';
     }
 
     public function obtenerPorId(int $id): ?array
