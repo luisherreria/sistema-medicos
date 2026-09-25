@@ -198,43 +198,7 @@ try {
 
     $prestador = trim($prestador, " \t\n\r\0\x0B-.,_:/\\|");
 
-    // ── Total: optimizado sin riesgo de Backtracking ─────────────────────
-    $importe = 0.00;
-
-    // 1. Regla Estricta: Tolera hasta 80 caracteres intermedios pero se detiene al ver números (Súper rápida)
-    if (preg_match_all('/(?:Total|Total General|Total en \$|Son pesos|Son|Importe)[^\d]{0,80}?(\d{1,12}(?:[.,\h]\d{3})*[.,]\d{2})(?!\d)/is', $texto, $matches)) {
-        $num_str = end($matches[1]);
-        $num_str = preg_replace('/\h+/', '', $num_str); // Limpia espacios horizontales
-        
-        if (preg_match('/[.,](\d{2})$/', $num_str, $dec_match)) {
-            $decimales = $dec_match[1];
-            $parte_entera = preg_replace('/[^\d]/', '', substr($num_str, 0, -3));
-            if (!empty($parte_entera)) {
-                $importe = (float)($parte_entera . '.' . $decimales);
-            }
-        }
-    }
-
-    // 2. Fallback Seguro: máximo del documento (tope 100 millones para evitar colapsos)
-    if (empty($importe) || $importe == 0.00) {
-        if (preg_match_all('/(\d{1,12}(?:[.,\h]\d{3})*[.,]\d{2})(?!\d)/', $texto, $matches)) {
-            $max_importe = 0.00;
-            foreach ($matches[1] as $num_str) {
-                $num_str = preg_replace('/\h+/', '', $num_str); // Limpia espacios horizontales
-                if (preg_match('/[.,](\d{2})$/', $num_str, $dec_match)) {
-                    $decimales = $dec_match[1];
-                    $parte_entera = preg_replace('/[^\d]/', '', substr($num_str, 0, -3));
-                    if (!empty($parte_entera)) {
-                        $val = (float)($parte_entera . '.' . $decimales);
-                        if ($val > $max_importe && $val < 99999999.99) {
-                            $max_importe = $val;
-                        }
-                    }
-                }
-            }
-            $importe = $max_importe;
-        }
-    }
+    $importe = rfpExtraerImporteDeTexto($texto);
 
     // ── Nro factura: Punto de Venta + Comp. N°/Nro (evitar CAE) ───────────
     $nro_factura = '';

@@ -399,6 +399,12 @@ class FacturaPdfParser
 
     private function extraerImporte($t)
     {
+        if (function_exists('rfpExtraerImporteDeTexto')) {
+            $val = rfpExtraerImporteDeTexto($t);
+            if ($val > 0) {
+                return $val;
+            }
+        }
         $patrones = array(
             '/IMPORTE\s+TOTAL\s*:?\s*\$?\s*([\d\.\,]+)/u',
             '/TOTAL\s+FACTURA\s*:?\s*\$?\s*([\d\.\,]+)/u',
@@ -410,7 +416,11 @@ class FacturaPdfParser
         );
         foreach ($patrones as $re) {
             if (preg_match($re, $t, $m)) {
-                $val = $this->parseImporte($m[1]);
+                $raw = $m[1];
+                if (preg_match('/%\s*$/', $raw) || preg_match('/ingresos\s+brutos/i', $m[0])) {
+                    continue;
+                }
+                $val = $this->parseImporte($raw);
                 if ($val > 0) {
                     return $val;
                 }
@@ -561,13 +571,15 @@ class FacturaPdfParser
 
     public function parseImporte($s)
     {
+        if (function_exists('rfpNumeroTextoAFloat')) {
+            return rfpNumeroTextoAFloat($s);
+        }
         $s = trim(isset($s) ? $s : '');
         $s = str_replace(array('$', ' ', 'ARS'), '', $s);
         $s = preg_replace('/[^\d,\.]/', '', $s);
         if ($s === '') {
             return 0.0;
         }
-        // 16.907,49 → 16907.49
         $s = str_replace('.', '', $s);
         $s = str_replace(',', '.', $s);
         return (float) $s;

@@ -265,25 +265,171 @@ function rfpPeriodoAamm($periodo)
 }
 
 /**
- * Convierte un importe con formato argentino (1.234.567,89) a float.
- * Quita miles (.) y pasa la coma decimal a punto.
+ * Convierte un importe AR (26.667,87) o US (26,667.87) a float.
+ *
+ * @param mixed $valor
+ * @return float
+ */
+function rfpNumeroTextoAFloat($valor)
+{
+    $s = trim((string) $valor);
+    $s = str_replace(array('$', ' ', 'ARS'), '', $s);
+    $s = preg_replace('/[^\d,\.]/', '', $s);
+    if ($s === '' || !preg_match('/\d/', $s)) {
+        return 0.0;
+    }
+    $lastComma = strrpos($s, ',');
+    $lastDot   = strrpos($s, '.');
+    if ($lastComma !== false && $lastDot !== false) {
+        if ($lastDot > $lastComma) {
+            $s = str_replace(',', '', $s);
+        } else {
+            $s = str_replace('.', '', $s);
+            $s = str_replace(',', '.', $s);
+        }
+    } elseif ($lastComma !== false) {
+        $dec = strlen($s) - $lastComma - 1;
+        if ($dec === 2) {
+            $s = str_replace(',', '.', $s);
+        } else {
+            $s = str_replace(',', '', $s);
+        }
+    } elseif ($lastDot !== false) {
+        $puntos = substr_count($s, '.');
+        $dec = strlen($s) - $lastDot - 1;
+        if ($puntos > 1) {
+            if ($dec === 2) {
+                $s = preg_replace('/\.(?=.*\.)/', '', $s);
+            } else {
+                $s = str_replace('.', '', $s);
+            }
+        } elseif ($dec === 3 && $puntos === 1) {
+            $s = str_replace('.', '', $s);
+        }
+    }
+    return (float) $s;
+}
+
+/**
+ * Convierte un importe con formato argentino o mixto a float.
  *
  * @param mixed $valor
  * @return float
  */
 function rfpLimpiarImporte($valor)
 {
-    $s = trim(str_replace(array('$', ' '), '', (string) $valor));
-    if ($s === '') {
+    return rfpNumeroTextoAFloat($valor);
+}
+
+/**
+ * @param string $texto
+ * @param int    $pos
+ * @param int    $lenNum
+ * @return bool
+ */
+function rfpImporteEsPorcentaje($texto, $pos, $lenNum)
+{
+    $after = substr($texto, $pos + $lenNum, 12);
+    if (preg_match('/^\s*%/', $after)) {
+        return true;
+    }
+    $raw = substr($texto, $pos, $lenNum);
+    $val = rfpNumeroTextoAFloat($raw);
+    if ($val >= 100) {
+        return false;
+    }
+    $ini = max(0, $pos - 32);
+    $win = substr($texto, $ini, ($pos - $ini) + $lenNum + 8);
+    if (preg_match('/ingresos\s+brutos|\bIIBB\b|alicuo|percepcion|\bTASA\b/i', $win)) {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * @param string $texto
+ * @return array
+ */
+function rfpListarImportesCandidatos($texto)
+{
+    $out = array();
+    $reNum = '/(\d{1,3}(?:[.,\h]\d{3})+[.,]\d{2}|\d+[.,]\d{2})/';
+    if (!preg_match_all($reNum, $texto, $m, PREG_OFFSET_CAPTURE)) {
+        return $out;
+    }
+    foreach ($m[1] as $hit) {
+        $raw = $hit[0];
+        $pos = (int) $hit[1];
+        if (rfpImporteEsPorcentaje($texto, $pos, strlen($raw))) {
+            continue;
+        }
+        $val = rfpNumeroTextoAFloat($raw);
+        if ($val <= 0 || $val >= 99999999.99) {
+            continue;
+        }
+        $out[] = $val;
+    }
+    if ($out) {
+        $max = max($out);
+        if ($max >= 100) {
+            $filtrado = array();
+            foreach ($out as $v) {
+                if ($v >= 10) {
+                    $filtrado[] = $v;
+                }
+            }
+            if ($filtrado) {
+                return $filtrado;
+            }
+        }
+    }
+    return $out;
+}
+
+/**
+ * Extrae el importe total del texto OCR: prioriza TOTAL / IMPORTE TOTAL
+ * y descarta porcentajes (Ingresos Brutos 1.50%).
+ *
+ * @param string $texto
+ * @return float
+ */
+function rfpExtraerImporteDeTexto($texto)
+{
+    $texto = isset($texto) ? (string) $texto : '';
+    if ($texto === '') {
         return 0.0;
     }
-    if (strpos($s, ',') !== false) {
-        $s = str_replace('.', '', $s);
-        $s = str_replace(',', '.', $s);
-    } elseif (substr_count($s, '.') > 1) {
-        $s = str_replace('.', '', $s);
+
+    $reNum = '(\d{1,3}(?:[.,\h]\d{3})+[.,]\d{2}|\d+[.,]\d{2})';
+    $reClave = '/(?:IMPORTE\s+TOTAL|TOTAL\s+FACTURA|TOTAL\s+NETO|TOTAL\s+GENERAL|TOTAL\s+A\s+PAGAR|TOTAL\s+EN\s*\$|SON\s+PESOS|\bTOTAL\b|\bIMPORTE\b)\s*:?\s*\$?\s*' . $reNum . '/iu';
+    $candidatos = array();
+    if (preg_match_all($reClave, $texto, $m, PREG_OFFSET_CAPTURE)) {
+        $n = count($m[1]);
+        for ($i = 0; $i < $n; $i++) {
+            $raw = $m[1][$i][0];
+            $pos = (int) $m[1][$i][1];
+            if (rfpImporteEsPorcentaje($texto, $pos, strlen($raw))) {
+                continue;
+            }
+            $val = rfpNumeroTextoAFloat($raw);
+            if ($val > 0 && $val < 99999999.99) {
+                $candidatos[] = $val;
+            }
+        }
     }
-    return (float) $s;
+    if ($candidatos) {
+        return max($candidatos);
+    }
+
+    $len = strlen($texto);
+    $pie = ($len > 80) ? substr($texto, (int) ($len * 0.55)) : $texto;
+    $valsPie = rfpListarImportesCandidatos($pie);
+    if ($valsPie) {
+        return max($valsPie);
+    }
+
+    $valsAll = rfpListarImportesCandidatos($texto);
+    return $valsAll ? max($valsAll) : 0.0;
 }
 
 /**
