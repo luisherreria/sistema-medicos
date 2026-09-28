@@ -373,6 +373,32 @@ class FacturasTempModel
     }
 
     /**
+     * Resta $monto del importe original de la fila (COIMPFAC / COTOTALFAC).
+     *
+     * @param int   $id
+     * @param float $monto
+     */
+    public function restarImporte($id, $monto)
+    {
+        $id = (int) $id;
+        $monto = (float) $monto;
+        if ($id <= 0 || $monto <= 0) {
+            return;
+        }
+        $stmt = $this->db->prepare(
+            'UPDATE t_facturas_temp
+             SET COIMPFAC = GREATEST(0, IFNULL(COIMPFAC, 0) - :m1),
+                 COTOTALFAC = GREATEST(0, IFNULL(COTOTALFAC, 0) - :m2)
+             WHERE id = :id'
+        );
+        $stmt->execute(array(
+            ':m1' => $monto,
+            ':m2' => $monto,
+            ':id' => $id,
+        ));
+    }
+
+    /**
      * @return PDO
      */
     public function pdo()

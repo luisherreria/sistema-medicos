@@ -1,11 +1,12 @@
 <?php
 /**
  * procesar_pdf.php
- * Recibe un PDF (Dropzone), extrae texto vía OCR.space, inserta en t_facturas_temp.
+ * Recibe PDF (OCR.space) o PNG/JPG (Google Document AI) e inserta en t_facturas_temp.
  * PHP 5.6 — array() / isset() ternarios / PDO try-catch.
  */
 
 require_once dirname(__FILE__) . '/includes/facturas_pdf_common.php';
+require_once dirname(__FILE__) . '/includes/document_ai.php';
 require_once dirname(__FILE__) . '/lib/FacturaPdfParser.php';
 require_once dirname(__FILE__) . '/models/FacturasTempModel.php';
 
@@ -23,7 +24,7 @@ try {
 
     $field = isset($_FILES['file']) ? 'file' : (isset($_FILES['pdfs']) ? 'pdfs' : '');
     if ($field === '') {
-        throw new Exception('No se recibió ningún archivo PDF.');
+        throw new Exception('No se recibió ningún archivo.');
     }
 
     $file = $_FILES[$field];
@@ -45,26 +46,40 @@ try {
     if (!isset($file['size']) || $file['size'] <= 0) {
         throw new Exception('El archivo está vacío.');
     }
-    if ($file['size'] > 10 * 1024 * 1024) {
-        throw new Exception('El PDF supera los 10 MB.');
+    if ($file['size'] > 12 * 1024 * 1024) {
+        throw new Exception('El archivo supera los 12 MB.');
     }
     $ext = strtolower(pathinfo($nombreOrig, PATHINFO_EXTENSION));
-    if ($ext !== 'pdf') {
-        throw new Exception('Solo se aceptan archivos PDF.');
+    $mimesImg = array(
+        'jpg'  => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'png'  => 'image/png',
+    );
+    $esPdf    = ($ext === 'pdf');
+    $esImagen = isset($mimesImg[$ext]);
+    if (!$esPdf && !$esImagen) {
+        throw new Exception('Solo se aceptan PDF, PNG o JPG.');
     }
 
     $fh  = fopen($file['tmp_name'], 'rb');
-    $sig = $fh ? fread($fh, 5) : '';
+    $sig = $fh ? fread($fh, 8) : '';
     if ($fh) {
         fclose($fh);
     }
-    if ($sig !== '%PDF-') {
+    if ($esPdf && substr($sig, 0, 5) !== '%PDF-') {
         throw new Exception('El archivo no es un PDF válido.');
+    }
+    if ($ext === 'png' && substr($sig, 0, 8) !== "\x89PNG\r\n\x1a\n") {
+        throw new Exception('El archivo no es un PNG válido.');
+    }
+    if (($ext === 'jpg' || $ext === 'jpeg') && substr($sig, 0, 2) !== "\xFF\xD8") {
+        throw new Exception('El archivo no es un JPG válido.');
     }
 
     $safe = preg_replace('/[^A-Za-z0-9._-]/', '_', basename($nombreOrig));
-    if ($safe === '' || strtolower(substr($safe, -4)) !== '.pdf') {
-        $safe = 'factura.pdf';
+    $extOk = $esPdf ? '.pdf' : ('.' . $ext);
+    if ($safe === '' || strtolower(substr($safe, -strlen($extOk))) !== $extOk) {
+        $safe = $esPdf ? 'factura.pdf' : ('planilla.' . $ext);
     }
     $safe = date('YmdHis') . '_' . mt_rand(1000, 9999) . '_' . $safe;
 
@@ -73,37 +88,41 @@ try {
         throw new Exception('No se pudo guardar el archivo en el servidor.');
     }
 
-    // ── Extracción de texto vía API OCR.space (cURL PHP 5.6) ─────────────
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, 'https://api.ocr.space/parse/image');
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 90);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, array(
-        'apikey'             => 'helloworld',
-        'language'           => 'spa',
-        'isOverlayRequired'  => 'false',
-        'file'               => new CURLFile($targetFile, 'application/pdf', basename($targetFile)),
-    ));
-
-    $rawJson = curl_exec($ch);
-    $curlErr = curl_error($ch);
-    curl_close($ch);
-
-    if ($rawJson === false || $rawJson === '') {
-        throw new Exception('Error al consultar OCR.space: ' . $curlErr);
-    }
-
-    $respuestaJson = json_decode($rawJson, true);
     $texto = '';
-    if (isset($respuestaJson['ParsedResults'][0]['ParsedText'])) {
-        $texto = $respuestaJson['ParsedResults'][0]['ParsedText'];
-    } elseif (isset($respuestaJson['ErrorMessage'])) {
-        $errApi = $respuestaJson['ErrorMessage'];
-        if (is_array($errApi)) {
-            $errApi = implode(' ', $errApi);
+    if ($esImagen) {
+        $texto = rfpDocumentAiTexto($targetFile, $mimesImg[$ext]);
+    } else {
+        // ── Extracción de texto vía API OCR.space (cURL PHP 5.6) ─────────────
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, 'https://api.ocr.space/parse/image');
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 90);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, array(
+            'apikey'             => 'helloworld',
+            'language'           => 'spa',
+            'isOverlayRequired'  => 'false',
+            'file'               => new CURLFile($targetFile, 'application/pdf', basename($targetFile)),
+        ));
+
+        $rawJson = curl_exec($ch);
+        $curlErr = curl_error($ch);
+        curl_close($ch);
+
+        if ($rawJson === false || $rawJson === '') {
+            throw new Exception('Error al consultar OCR.space: ' . $curlErr);
         }
-        throw new Exception('OCR.space: ' . $errApi);
+
+        $respuestaJson = json_decode($rawJson, true);
+        if (isset($respuestaJson['ParsedResults'][0]['ParsedText'])) {
+            $texto = $respuestaJson['ParsedResults'][0]['ParsedText'];
+        } elseif (isset($respuestaJson['ErrorMessage'])) {
+            $errApi = $respuestaJson['ErrorMessage'];
+            if (is_array($errApi)) {
+                $errApi = implode(' ', $errApi);
+            }
+            throw new Exception('OCR.space: ' . $errApi);
+        }
     }
 
     $parser = new FacturaPdfParser();
@@ -219,12 +238,36 @@ try {
     // Período: siempre mes anterior (se ignora lo que diga el OCR).
     $periodo = DateHelper::getPeriodoAnterior();
 
+    $esPlanillaCp = false;
+    if ($esImagen) {
+        require_once dirname(__FILE__) . '/models/PrestacionesModel.php';
+        $modPrac = new PrestacionesModel();
+        $pareceCp = $modPrac->esPlanillaCp($texto) || ($nro_factura === '' && $importe == 0.00);
+        if ($pareceCp) {
+            $esPlanillaCp = true;
+            $planilla = $modPrac->armarPlanillaMelluso($texto);
+            $prestador   = $planilla['prestador'];
+            $codPrest    = $planilla['cod_prestador'];
+            $sucursal    = $planilla['sucursal'];
+            $nro_factura = $planilla['nro_factura'];
+            $importe     = (float) $planilla['importe'];
+            if (empty($campos['fecha'])) {
+                $campos['fecha'] = $planilla['fecha'];
+            }
+        }
+    }
+
     // ── Validación de seguridad (Freno a filas fantasmas) ─────────────────
     if (empty($prestador) && empty($nro_factura) && $importe == 0.00) {
-        throw new Exception('El motor OCR no detectó datos legibles. Verificá la calidad del PDF o cargalo manualmente.');
+        throw new Exception('El motor OCR no detectó datos legibles. Verificá la calidad del archivo o cargalo manualmente.');
     }
 
     $model = new FacturasTempModel();
+    $idOriginal = isset($_POST['id_original']) ? (int) $_POST['id_original'] : 0;
+    if ($idOriginal > 0 && $importe > 0) {
+        $model->restarImporte($idOriginal, $importe);
+    }
+
     $resultado = $model->upsertDesdePdf(array(
         'prestador'   => $prestador,
         'cod_prest'   => $codPrest,
@@ -244,9 +287,10 @@ try {
         ob_end_clean();
     }
     echo json_encode(array(
-        'status'  => $status,
-        'id'      => (int) $resultado['id'],
-        'message' => ($status === 'updated') ? 'Factura actualizada' : 'Procesado correctamente',
+        'status'       => $status,
+        'id'           => (int) $resultado['id'],
+        'id_original'  => $idOriginal > 0 ? $idOriginal : 0,
+        'message'      => ($status === 'updated') ? 'Factura actualizada' : 'Procesado correctamente',
     ));
     exit;
 } catch (Exception $e) {

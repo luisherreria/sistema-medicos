@@ -53,8 +53,8 @@ require_once dirname(__FILE__) . '/views/layouts/header.php';
     <div class="card-body">
         <form action="procesar_pdf.php" class="dropzone" id="miDropzone" style="border: 2px dashed #0d6efd; background: #f8f9fa; border-radius: 5px;">
             <div class="dz-message text-center">
-                <h4>Arrastrá los PDF aquí o hacé clic para seleccionar</h4>
-                <span class="text-muted">Las facturas procesadas aparecerán automáticamente en la tabla de abajo.</span>
+                <h4>Arrastrá PDF, PNG o JPG aquí o hacé clic para seleccionar</h4>
+                <span class="text-muted">PDF de facturas u hojas manuscritas (Document AI). Las filas aparecen abajo.</span>
             </div>
         </form>
         <div id="rfp-upload-msg" class="alert d-none mt-3 py-2 mb-0" style="font-size:.85rem;"></div>
@@ -302,13 +302,10 @@ require_once dirname(__FILE__) . '/views/layouts/header.php';
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.9.3/dropzone.min.js"></script>
 <script>
-function formatearImporteVisual(el) {
-    if (!el) {
-        return;
-    }
-    var raw = String(el.value || '').replace(/\$/g, '').replace(/\s/g, '').trim();
+function rfpParseImporteAR(raw) {
+    raw = String(raw || '').replace(/\$/g, '').replace(/\s/g, '').trim();
     if (raw === '') {
-        return;
+        return NaN;
     }
     var n;
     if (raw.indexOf(',') !== -1) {
@@ -318,24 +315,35 @@ function formatearImporteVisual(el) {
     } else {
         n = parseFloat(raw);
     }
-    if (isNaN(n)) {
-        return;
-    }
-    var fmt;
+    return n;
+}
+
+function rfpFmtImporteAR(n) {
     if (typeof Intl !== 'undefined' && Intl.NumberFormat) {
-        fmt = new Intl.NumberFormat('es-AR', {
+        return new Intl.NumberFormat('es-AR', {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
         }).format(n);
-    } else {
-        var parts = n.toFixed(2).split('.');
-        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-        fmt = parts[0] + ',' + parts[1];
     }
+    var parts = n.toFixed(2).split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return parts[0] + ',' + parts[1];
+}
+
+function formatearImporteVisual(el) {
+    if (!el) {
+        return;
+    }
+    var n = rfpParseImporteAR(el.value);
+    if (isNaN(n)) {
+        return;
+    }
+    var fmt = rfpFmtImporteAR(n);
     el.value = fmt;
     el.setAttribute('data-importe', fmt);
 }
 window.formatearImporteVisual = formatearImporteVisual;
+window.rfpParseImporteAR = rfpParseImporteAR;
 
 (function () {
     'use strict';
@@ -696,8 +704,39 @@ window.formatearImporteVisual = formatearImporteVisual;
         $jq(this).val($jq(this).val().toUpperCase());
     });
 
+    $jq(document).on('focus', '#tabla-facturas .inp-imp', function () {
+        this.setAttribute('data-antes', this.value);
+        if (!this.getAttribute('data-importe-orig')) {
+            this.setAttribute('data-importe-orig', this.value);
+        }
+    });
+
     $jq(document).on('blur', '#tabla-facturas .inp-imp', function () {
-        formatearImporteVisual(this);
+        var el = this;
+        var $tr = $jq(el).closest('tr');
+        var colocado = rfpParseImporteAR(el.value);
+        var antes = rfpParseImporteAR(el.getAttribute('data-antes') || '');
+        var orig = rfpParseImporteAR(el.getAttribute('data-importe-orig') || '');
+        var origenId = $tr.attr('data-origen-id') || '';
+        var cambio = isNaN(antes) || Math.abs(colocado - antes) > 0.009;
+
+        if (cambio && !isNaN(colocado) && colocado > 0) {
+            if (origenId) {
+                var $origInp = $jq('#tabla-facturas').find('tr[data-id="' + origenId + '"] .inp-imp');
+                if ($origInp.length) {
+                    var origAmt = rfpParseImporteAR($origInp.attr('data-importe-orig') || $origInp.val());
+                    if (!isNaN(origAmt) && origAmt > 0) {
+                        var resto = Math.max(0, origAmt - colocado);
+                        $origInp.val(rfpFmtImporteAR(resto));
+                        $origInp.attr('data-importe', rfpFmtImporteAR(resto));
+                    }
+                }
+            } else if (!isNaN(orig) && orig > 0 && colocado < orig - 0.009) {
+                var restoMismo = Math.max(0, orig - colocado);
+                el.value = rfpFmtImporteAR(restoMismo);
+            }
+        }
+        formatearImporteVisual(el);
     });
 
     $jq(document).on('keydown', '#tabla-facturas .edit-codprest', function (e) {
@@ -943,6 +982,7 @@ window.formatearImporteVisual = formatearImporteVisual;
                     dt.row.add(trNode).draw(false);
                     var $nueva = $jq('#tabla-facturas').find('tr[data-id="' + res.id + '"]');
                     if ($nueva.length) {
+                        $nueva.attr('data-origen-id', id);
                         $tr.after($nueva);
                     }
                 } catch (eDup) {
@@ -1162,10 +1202,11 @@ $(document).ready(function () {
         paramName: 'file',
         parallelUploads: 1,
         uploadMultiple: false,
-        acceptedFiles: '.pdf',
-        maxFilesize: 10,
+        acceptedFiles: '.pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg',
+        maxFilesize: 12,
         headers: { 'X-Requested-With': 'XMLHttpRequest' },
-        dictDefaultMessage: 'Arrastra los archivos aquí'
+        dictDefaultMessage: 'Arrastrá PDF, PNG o JPG aquí',
+        dictInvalidFileType: 'Solo se aceptan PDF, PNG o JPG.'
     });
 
     function rfpMostrarMsg(tipo, txt) {
@@ -1226,6 +1267,22 @@ $(document).ready(function () {
                 }
                 try {
                     table.row.add(trNode).draw(false);
+                    if (res.id_original) {
+                        $.get('obtener_fila_factura.php?id=' + res.id_original)
+                            .done(function (htmlOrig) {
+                                var $orig = $('#tabla-facturas').find('tr[data-id="' + res.id_original + '"]');
+                                if (!$orig.length) {
+                                    return;
+                                }
+                                var $w2 = $('<table><tbody></tbody></table>');
+                                $w2.find('tbody').append(htmlOrig);
+                                var n2 = $w2.find('tr')[0];
+                                if (n2) {
+                                    table.row($orig).remove();
+                                    table.row.add(n2).draw(false);
+                                }
+                            });
+                    }
                     rfpMostrarMsg('success', res.message || 'Procesado correctamente');
                 } catch (eAdd) {
                     rfpMostrarMsg('warning', 'Guardado. Recargá la página para ver la fila.');
@@ -1238,13 +1295,23 @@ $(document).ready(function () {
 
     miDropzone.on('sending', function (file, xhr, formData) {
         formData.append('csrf_token', <?= json_encode($csrf) ?>);
+        var ids = [];
+        $('#tabla-facturas .rfp-check:checked').each(function () {
+            var v = parseInt(this.value, 10);
+            if (v > 0) {
+                ids.push(v);
+            }
+        });
+        if (ids.length === 1) {
+            formData.append('id_original', ids[0]);
+        }
         $('#rfp-upload-msg').addClass('d-none').text('');
     });
 
     miDropzone.on('success', function (file, response) {
         var res = rfpParseRes(response);
         if (!res || res.status === 'error') {
-            var msg = (res && res.message) ? res.message : 'No se pudo procesar el PDF';
+            var msg = (res && res.message) ? res.message : 'No se pudo procesar el archivo';
             rfpMarcarError(file, msg);
             return;
         }

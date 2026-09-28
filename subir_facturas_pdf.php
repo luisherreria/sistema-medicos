@@ -171,13 +171,13 @@ require_once dirname(__FILE__) . '/views/layouts/header.php';
     new Dropzone('#dz-facturas', {
         url: 'procesar_pdf.php',
         paramName: 'file',
-        acceptedFiles: 'application/pdf,.pdf',
-        maxFilesize: 10,
+        acceptedFiles: 'application/pdf,.pdf,image/png,image/jpeg,.png,.jpg,.jpeg',
+        maxFilesize: 12,
         parallelUploads: 1,
         autoProcessQueue: false,
         addRemoveLinks: false,
-        dictDefaultMessage: '⚡ Arrastrá los PDF de facturas aquí o hacé clic para seleccionar',
-        dictInvalidFileType: 'Solo se aceptan archivos PDF.',
+        dictDefaultMessage: '⚡ Arrastrá PDF, PNG o JPG aquí o hacé clic para seleccionar',
+        dictInvalidFileType: 'Solo se aceptan PDF, PNG o JPG.',
         dictFileTooBig: 'El archivo es demasiado grande (máx. 10 MB).',
         headers: { 'X-Requested-With': 'XMLHttpRequest' },
         init: function () {

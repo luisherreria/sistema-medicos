@@ -110,6 +110,12 @@ tailwind.config = { corePlugins: { preflight: false } };
            class="btn btn-sm btn-info flex-shrink-0"
            style="color: white;font-size:0.78rem;">📋 Ver Pendientes</a>
 
+        <a href="index.php?route=cp-manuscrito"
+           class="btn btn-sm btn-outline-primary flex-shrink-0"
+           style="font-size:0.78rem;" title="Planillas CP manuscritas">
+            <i class="fa-solid fa-pen-to-square me-1"></i>CP manuscritas
+        </a>
+
         <button type="button" id="rf-btn-papelera"
                 class="btn btn-sm btn-outline-secondary flex-shrink-0"
                 style="font-size:0.78rem;" title="Ver facturas dadas de baja">

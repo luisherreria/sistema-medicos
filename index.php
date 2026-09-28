@@ -40,6 +40,7 @@ require_once __DIR__ . '/controllers/PrestadoresController.php';
 require_once __DIR__ . '/controllers/ChatController.php';
 require_once __DIR__ . '/controllers/RegistrfController.php';
 require_once __DIR__ . '/controllers/RegistrfPdfController.php';
+require_once __DIR__ . '/controllers/CpManuscritoController.php';
 require_once __DIR__ . '/controllers/NomenclaController.php';
 require_once __DIR__ . '/controllers/TablaGeneralController.php';
 require_once __DIR__ . '/controllers/PlantillasEmailsController.php';
@@ -173,6 +174,18 @@ switch ($route) {
     case 'subir-facturas-pdf':
     case 'subir_facturas_pdf':
         require __DIR__ . '/subir_facturas_pdf.php';
+        break;
+
+    // ── Planillas CP manuscritas (Document AI + arancel 42XXXX) ───────────
+    case 'cp-manuscrito':
+    case 'subir-cp-manuscrito':
+    case 'subir_cp_manuscrito':
+        $controller = new CpManuscritoController();
+        $action     = trim($_GET['action'] ?? '');
+        switch ($action) {
+            case 'procesar': $controller->procesar(); break;
+            default:         $controller->index();    break;
+        }
         break;
 
     // ── Módulo Nomenclador Nacional (Archivos → Nomenclador) ──────────────

@@ -516,6 +516,9 @@ class Permission
             'registro_facturas_pdf'         => 'Pendientes de Facturas PDF',
             'subir-facturas-pdf'            => 'Subir Facturas PDF',
             'subir_facturas_pdf'            => 'Subir Facturas PDF',
+            'cp-manuscrito'                 => 'Planillas CP manuscritas',
+            'subir-cp-manuscrito'           => 'Planillas CP manuscritas',
+            'subir_cp_manuscrito'           => 'Planillas CP manuscritas',
             'carga-diagnosticos'            => 'Carga de Diagnósticos',
             'cierre-periodo'                => 'Cierre de Período',
         ];
@@ -637,6 +640,7 @@ class Permission
                         'type'=>'group','label'=>'Registración de Facturas','icon'=>'fa-solid fa-file-invoice',
                         'children' => [
                             ['type'=>'item','clave'=>'MNU_CD_FAC_INGRESO','label'=>'Ingreso'],
+                            ['type'=>'item','clave'=>'MNU_CD_FAC_INGRESO','label'=>'Planillas CP manuscritas','route'=>'cp-manuscrito'],
                             [
                                 'type'=>'group','label'=>'Listados','icon'=>'fa-solid fa-list',
                                 'children' => [
