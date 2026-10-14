@@ -40,6 +40,7 @@ $puedeAgregar    = (bool) ($puedeAgregar ?? false);
 $puedeEditar     = (bool) ($puedeEditar ?? false);
 $puedeBorrar     = (bool) ($puedeBorrar ?? false);
 $puedeActualizar = (bool) ($puedeActualizar ?? false);
+$puedeImportar   = (bool) ($puedeImportar ?? false);
 $dbError         = $dbError ?? null;
 
 $cols = [
@@ -126,10 +127,19 @@ tailwind.config = { corePlugins: { preflight: false } };
             <?php endif; ?>
 
             <?php if ($puedeActualizar): ?>
-            <button type="button" id="nn-btn-actualizar"
-                    title="Actualiza Descripcion de Practicas en Prestadores, Sucursales, Obra Social"
+            <button type="button" id="nn-btn-act-desc"
+                    title="Actualiza la Descripcion - Grupo en Sucursales y Prestadores"
+                    onclick="actualizarDescripcionGrupo()"
                     class="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-white text-xs font-semibold bg-slate-500 hover:bg-slate-600 border-0">
-                <i class="fa-solid fa-arrows-rotate"></i> Actualizar Descripción
+                <i class="fa-solid fa-arrows-rotate me-1"></i> Actualizar Descripción
+            </button>
+            <?php endif; ?>
+
+            <?php if ($puedeImportar): ?>
+            <button type="button" id="nn-btn-importar"
+                    title="Importar Plantilla de excel practicas y prestador"
+                    class="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-white text-xs font-semibold bg-teal-700 hover:bg-teal-800 border-0">
+                <i class="fa-solid fa-file-import"></i> Importar Plantilla
             </button>
             <?php endif; ?>
         </div>
@@ -210,7 +220,9 @@ tailwind.config = { corePlugins: { preflight: false } };
                 </tr>
             <?php else: ?>
                 <?php foreach ($registros as $i => $row): ?>
-                <tr class="<?= $i % 2 === 0 ? 'bg-white' : 'bg-slate-50' ?> hover:bg-sky-50 border-b border-slate-100">
+                <tr class="nn-fila <?= $i % 2 === 0 ? 'bg-white' : 'bg-slate-50' ?> hover:bg-sky-50 border-b border-slate-100"
+                    data-codigo="<?= htmlspecialchars(trim((string) ($row['tacodigo'] ?? ''))) ?>"
+                    style="cursor:pointer;">
                     <td class="p-2 border border-slate-100 font-mono text-xs"><?= htmlspecialchars((string) ($row['tacodigo'] ?? '')) ?></td>
                     <td class="p-2 border border-slate-100"><?= htmlspecialchars((string) ($row['tatiponom'] ?? '')) ?></td>
                     <td class="p-2 border border-slate-100"><?= htmlspecialchars((string) ($row['tadescrip'] ?? '')) ?></td>
@@ -284,16 +296,420 @@ tailwind.config = { corePlugins: { preflight: false } };
 <?php if ($puedeBorrar): ?>
 <?php require __DIR__ . '/nomencla/_modal_borrar_rango.php'; ?>
 <?php endif; ?>
+<?php if ($puedeEditar || $puedeAgregar): ?>
+<?php require __DIR__ . '/nomencla/_modal_editar_nomenclador.php'; ?>
+<?php endif; ?>
+
+<style>
+#nn-tabla tr.nn-fila-sel { background: #dbeafe !important; }
+</style>
+
+<script>
+window.CSRF_TOKEN = <?= json_encode($_SESSION['csrf_token'] ?? '') ?>;
+function actualizarDescripcionGrupo() {
+    if (!confirm('¿Desea actualizar las descripciones y grupos del Nomenclador en Sucursales (praespsu) y Prestadores (pracespe)?')) {
+        return;
+    }
+
+    var btn = document.getElementById('nn-btn-act-desc');
+    if (!btn) return;
+    var oldHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i> Actualizando...';
+
+    fetch('index.php?route=nomenclador&action=actualizar_descripciones', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: 'csrf_token=' + encodeURIComponent(window.CSRF_TOKEN || '')
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (res) {
+        btn.disabled = false;
+        btn.innerHTML = oldHtml;
+        if (res && res.ok) {
+            alert('¡Proceso finalizado!\n\n' + res.msg);
+        } else {
+            alert('Error: ' + ((res && (res.error || res.msg)) || 'No se pudo completar la actualización.'));
+        }
+    })
+    .catch(function () {
+        btn.disabled = false;
+        btn.innerHTML = oldHtml;
+        alert('Error de comunicación con el servidor.');
+    });
+}
+</script>
 
 <script>
 (function () {
-    ['nn-btn-agregar', 'nn-btn-editar', 'nn-btn-actualizar'].forEach(function (id) {
-        var btn = document.getElementById(id);
-        if (!btn) return;
-        btn.addEventListener('click', function () {
-            alert('Acción pendiente de implementar: ' + (btn.textContent || '').trim());
+    window.nnRecargarGrilla = function () {
+        return fetch(window.location.href, {
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function (r) { return r.text(); })
+        .then(function (html) {
+            var doc = new DOMParser().parseFromString(html, 'text/html');
+            ['nn-tbody', 'nn-paginacion', 'nn-resumen'].forEach(function (id) {
+                var nuevo = doc.getElementById(id);
+                var actual = document.getElementById(id);
+                if (nuevo && actual) actual.replaceWith(nuevo);
+            });
         });
-    });
+    };
+
+    var codigoSeleccionado = '';
+    var btnImportar = document.getElementById('nn-btn-importar');
+    if (btnImportar) {
+        btnImportar.addEventListener('click', function () {
+            alert('Acción pendiente de implementar: ' + (btnImportar.textContent || '').trim());
+        });
+    }
+
+    var codigoSeleccionado = '';
+    var catalogoCache = null;
+    var formEdit = document.getElementById('form-editar-nomenclador');
+
+    function marcarFila(tr) {
+        document.querySelectorAll('#nn-tabla tr.nn-fila-sel').forEach(function (row) {
+            row.classList.remove('nn-fila-sel');
+        });
+        if (tr) tr.classList.add('nn-fila-sel');
+        codigoSeleccionado = tr ? (tr.getAttribute('data-codigo') || '') : '';
+    }
+
+    var tabla = document.getElementById('nn-tabla');
+    if (tabla) {
+        tabla.addEventListener('click', function (ev) {
+            var tr = ev.target.closest ? ev.target.closest('tr.nn-fila') : null;
+            if (tr) marcarFila(tr);
+        });
+        tabla.addEventListener('dblclick', function (ev) {
+            var tr = ev.target.closest ? ev.target.closest('tr.nn-fila') : null;
+            if (!tr) return;
+            marcarFila(tr);
+            abrirEdicion(codigoSeleccionado);
+        });
+    }
+
+    function aviso(texto) {
+        if (window.Swal) {
+            window.Swal.fire({ icon: 'info', text: texto, confirmButtonColor: '#0d47a1' });
+        } else {
+            alert(texto);
+        }
+    }
+
+    function errorEdit(texto) {
+        var err = document.getElementById('nn-edit-error');
+        if (!err) return;
+        err.textContent = texto || '';
+        err.style.display = texto ? 'block' : 'none';
+    }
+
+    function esMarcado(valor) {
+        var t = String(valor == null ? '' : valor).trim().toUpperCase();
+        return t === '1' || t === 'S' || t === 'SI' || t === 'Y' || t === 'TRUE';
+    }
+
+    function cargarCatalogo() {
+        if (catalogoCache) return Promise.resolve(catalogoCache);
+        return fetch('index.php?route=nomenclador&action=catalogo_nomenclador', {
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (json) {
+            if (!json || !json.ok) throw new Error((json && json.msg) || 'No se pudieron cargar los catálogos.');
+            catalogoCache = json.data || {};
+            return catalogoCache;
+        });
+    }
+
+    function llenarCombo(select, opciones, valor) {
+        var usaDescripcion = select.getAttribute('data-valor') === 'descripcion';
+        var html = '<option value=""></option>';
+        var encontrado = false;
+        (opciones || []).forEach(function (op) {
+            var codigo = op.codigo == null ? '' : String(op.codigo);
+            var descripcion = op.descripcion == null ? '' : String(op.descripcion);
+            var value = usaDescripcion ? (descripcion || codigo) : codigo;
+            var label = descripcion && descripcion !== codigo ? (codigo + ' — ' + descripcion) : (descripcion || codigo);
+            if (value === String(valor || '')) encontrado = true;
+            html += '<option value="' + value.replace(/"/g, '&quot;') + '">' + label.replace(/</g, '&lt;') + '</option>';
+        });
+        if (valor && !encontrado) {
+            html += '<option value="' + String(valor).replace(/"/g, '&quot;') + '">' + String(valor).replace(/</g, '&lt;') + '</option>';
+        }
+        select.innerHTML = html;
+        select.value = valor || '';
+    }
+
+    function aplicarCatalogo(catalogo, datos) {
+        datos = datos || {};
+        document.querySelectorAll('#form-editar-nomenclador select.nn-combo').forEach(function (select) {
+            var clave = select.getAttribute('data-catalogo');
+            llenarCombo(select, catalogo[clave] || [], datos[select.name] || '');
+        });
+    }
+
+    function abrirModal() {
+        var modalEl = document.getElementById('modalEditarNomenclador');
+        if (modalEl && window.bootstrap) {
+            window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        }
+    }
+
+    function abrirEdicion(codigo) {
+        if (!formEdit) return;
+        if (!codigo) {
+            aviso('Seleccione una práctica de la grilla.');
+            return;
+        }
+        errorEdit('');
+        document.getElementById('nn-edit-accion').value = 'editar';
+        document.getElementById('nn-edit-modo').value = 'edicion';
+        var titulo = document.getElementById('modalEditarNomencladorLabel');
+        if (titulo) titulo.innerHTML = '<i class="fa-solid fa-book-medical me-2"></i>Actualización Datos Nomenclador';
+        var inputCodigo = document.getElementById('nn-edit-tacodigo');
+        inputCodigo.readOnly = true;
+        inputCodigo.classList.remove('is-invalid', 'is-valid', 'border-danger');
+        habilitarGuardar(true);
+
+        Promise.all([
+            cargarCatalogo(),
+            fetch('index.php?route=nomenclador&action=obtener_nomenclador&tacodigo=' + encodeURIComponent(codigo), {
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            }).then(function (r) { return r.json(); })
+        ]).then(function (res) {
+            var datos = res[1];
+            if (!datos || !datos.ok) throw new Error((datos && datos.msg) || 'No se encontró la práctica.');
+            var row = datos.data || {};
+            formEdit.reset();
+            document.getElementById('nn-edit-accion').value = 'editar';
+            document.getElementById('nn-edit-modo').value = 'edicion';
+            inputCodigo.readOnly = true;
+            inputCodigo.value = row.tacodigo || '';
+            document.getElementById('nn-edit-tadescrip').value = row.tadescrip || '';
+            document.getElementById('nn-edit-taimporte').value = row.taimporte != null ? Number(row.taimporte).toFixed(2) : '0.00';
+            document.getElementById('nn-edit-capitulo').value = row.capitulo || '';
+            document.getElementById('nn-edit-tvalnbu').value = row.tvalnbu != null ? Number(row.tvalnbu).toFixed(2) : '0.00';
+            aplicarCatalogo(res[0], row);
+            document.getElementById('nn-edit-vermodulo').checked = esMarcado(row.vermodulo);
+            document.getElementById('nn-edit-desdobla').checked = esMarcado(row.desdobla);
+            document.getElementById('nn-edit-isnbu').checked = esMarcado(row.isnbu);
+            abrirModal();
+        }).catch(function (err) {
+            aviso(err && err.message ? err.message : 'No se pudo abrir la práctica.');
+        });
+    }
+
+    var codigoDuplicado = false;
+
+    function habilitarGuardar(habilitar) {
+        var btn = document.getElementById('btn-guardar-nomenclador');
+        if (btn) btn.disabled = !habilitar;
+    }
+
+    function marcarCodigoInvalido(codigo) {
+        var inputCodigo = document.getElementById('nn-edit-tacodigo');
+        codigoDuplicado = true;
+        if (inputCodigo) {
+            inputCodigo.classList.add('is-invalid', 'border-danger');
+            inputCodigo.classList.remove('is-valid');
+        }
+        habilitarGuardar(false);
+        var msg = "El código '" + codigo + "' ya existe en el Nomenclador. Por favor ingrese un código diferente.";
+        errorEdit(msg);
+        if (window.Swal) {
+            window.Swal.fire({ icon: 'warning', title: 'Código existente', text: msg, confirmButtonColor: '#0d47a1' });
+        }
+    }
+
+    function marcarCodigoValido() {
+        var inputCodigo = document.getElementById('nn-edit-tacodigo');
+        codigoDuplicado = false;
+        if (inputCodigo) {
+            inputCodigo.classList.remove('is-invalid', 'border-danger');
+            inputCodigo.classList.add('is-valid');
+        }
+        errorEdit('');
+        habilitarGuardar(true);
+    }
+
+    function validarCodigoBlur() {
+        var accion = document.getElementById('nn-edit-accion');
+        var inputCodigo = document.getElementById('nn-edit-tacodigo');
+        if (!accion || !inputCodigo || accion.value !== 'nuevo') return;
+        var codigo = (inputCodigo.value || '').trim();
+        if (!codigo) {
+            codigoDuplicado = false;
+            inputCodigo.classList.remove('is-invalid', 'is-valid', 'border-danger');
+            errorEdit('');
+            habilitarGuardar(true);
+            return;
+        }
+        fetch('index.php?route=nomenclador&action=validar_codigo&tacodigo=' + encodeURIComponent(codigo), {
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (json) {
+            if (json && json.existe) {
+                marcarCodigoInvalido(json.tacodigo || codigo);
+            } else {
+                marcarCodigoValido();
+            }
+        })
+        .catch(function () {
+            errorEdit('No se pudo validar el código.');
+        });
+    }
+
+    function abrirAlta() {
+        if (!formEdit) return;
+        errorEdit('');
+        codigoDuplicado = false;
+        formEdit.reset();
+        document.getElementById('nn-edit-accion').value = 'nuevo';
+        document.getElementById('nn-edit-modo').value = 'alta';
+        var inputCodigo = document.getElementById('nn-edit-tacodigo');
+        inputCodigo.readOnly = false;
+        inputCodigo.disabled = false;
+        inputCodigo.value = '';
+        inputCodigo.classList.remove('is-invalid', 'is-valid', 'border-danger');
+        habilitarGuardar(true);
+        var titulo = document.getElementById('modalEditarNomencladorLabel');
+        if (titulo) titulo.innerHTML = '<i class="fa-solid fa-plus-circle me-2"></i>Nuevo Registro de Nomenclador';
+        cargarCatalogo().then(function (catalogo) {
+            aplicarCatalogo(catalogo, {});
+            document.getElementById('nn-edit-accion').value = 'nuevo';
+            document.getElementById('nn-edit-modo').value = 'alta';
+            document.getElementById('nn-edit-taimporte').value = '0.00';
+            document.getElementById('nn-edit-tvalnbu').value = '0.00';
+            abrirModal();
+            inputCodigo.focus();
+        }).catch(function (err) {
+            aviso(err && err.message ? err.message : 'No se pudieron cargar los catálogos.');
+        });
+    }
+
+    var btnEditar = document.getElementById('nn-btn-editar');
+    if (btnEditar) btnEditar.addEventListener('click', function () { abrirEdicion(codigoSeleccionado); });
+    var btnAgregar = document.getElementById('nn-btn-agregar');
+    if (btnAgregar) btnAgregar.addEventListener('click', abrirAlta);
+
+    var inputCodigoLive = document.getElementById('nn-edit-tacodigo');
+    var inputNombreLive = document.getElementById('nn-edit-tadescrip');
+    function aMayusculas() {
+        var start = this.selectionStart;
+        var end = this.selectionEnd;
+        this.value = (this.value || '').toUpperCase();
+        if (start != null && this.setSelectionRange) this.setSelectionRange(start, end);
+    }
+    if (inputCodigoLive) {
+        inputCodigoLive.addEventListener('input', aMayusculas);
+        inputCodigoLive.addEventListener('keyup', aMayusculas);
+        inputCodigoLive.addEventListener('input', function () {
+            if ((document.getElementById('nn-edit-accion') || {}).value !== 'nuevo') return;
+            codigoDuplicado = false;
+            inputCodigoLive.classList.remove('is-invalid', 'is-valid', 'border-danger');
+            errorEdit('');
+            habilitarGuardar(true);
+        });
+        inputCodigoLive.addEventListener('blur', validarCodigoBlur);
+    }
+    if (inputNombreLive) {
+        inputNombreLive.addEventListener('input', aMayusculas);
+        inputNombreLive.addEventListener('keyup', aMayusculas);
+    }
+
+    function validarAntesDeGuardar(codigo) {
+        var nombre = (document.getElementById('nn-edit-tadescrip').value || '').trim();
+        var grupocar = (document.getElementById('nn-edit-grupocar').value || '').trim();
+        var titulocar = (document.getElementById('nn-edit-gruposup').value || '').trim();
+        var tipo = (document.getElementById('nn-edit-tipo650').value || '').trim();
+
+        if (!nombre) {
+            return 'Se detecto falta de nombre en el codigo ' + codigo + '\nDebe revisar la misma';
+        }
+        if (grupocar && !titulocar) {
+            return 'Se detecto una Practica con Grupo Cartilla y no tiene Titulo Cartilla ' + codigo + '\nDebe revisar la misma';
+        }
+        if (!codigo) {
+            return 'Se detecto falta de codigo \nDebe revisar la misma';
+        }
+        if (!tipo) {
+            return 'Se detecto falta de Tipo Normativa 650  \nDebe revisar la misma';
+        }
+        return '';
+    }
+
+    if (formEdit) {
+        formEdit.addEventListener('submit', function (ev) {
+            ev.preventDefault();
+            errorEdit('');
+            var codigo = (document.getElementById('nn-edit-tacodigo').value || '').trim().toUpperCase();
+            var msgVal = validarAntesDeGuardar(codigo);
+            if (msgVal) {
+                errorEdit(msgVal);
+                if (window.Swal) {
+                    window.Swal.fire({
+                        icon: 'warning',
+                        title: 'Debe revisar la misma',
+                        html: msgVal.replace(/\n/g, '<br>'),
+                        confirmButtonColor: '#0d47a1'
+                    });
+                } else {
+                    alert(msgVal);
+                }
+                return;
+            }
+            if (codigoDuplicado || document.getElementById('nn-edit-tacodigo').classList.contains('is-invalid')) {
+                marcarCodigoInvalido(codigo);
+                return;
+            }
+            var submit = document.getElementById('btn-guardar-nomenclador');
+            if (submit) submit.disabled = true;
+            var datos = new FormData(formEdit);
+            if (!document.getElementById('nn-edit-vermodulo').checked) datos.set('vermodulo', '0');
+            if (!document.getElementById('nn-edit-desdobla').checked) datos.set('desdobla', '0');
+            if (!document.getElementById('nn-edit-isnbu').checked) datos.set('isnbu', '0');
+
+            fetch('index.php?route=nomenclador&action=guardar_nomenclador', {
+                method: 'POST',
+                body: datos,
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(function (r) { return r.json(); })
+            .then(function (json) {
+                if (!json || !json.ok) throw new Error((json && json.msg) || 'No se pudo guardar.');
+                var modalEl = document.getElementById('modalEditarNomenclador');
+                if (modalEl && window.bootstrap) {
+                    var inst = window.bootstrap.Modal.getInstance(modalEl);
+                    if (inst) inst.hide();
+                }
+                return window.nnRecargarGrilla().then(function () {
+                    codigoSeleccionado = '';
+                    if (window.Swal) {
+                        window.Swal.fire({ icon: 'success', title: 'Listo', text: json.msg, confirmButtonColor: '#0d47a1' });
+                    }
+                });
+            })
+            .catch(function (err) {
+                errorEdit(err && err.message ? err.message : 'No se pudo guardar.');
+            })
+            .finally(function () {
+                if (submit && !codigoDuplicado) submit.disabled = false;
+            });
+        });
+    }
 
     var btnBorrar = document.getElementById('nn-btn-borrar');
     var form = document.getElementById('form-borrar-rango');
@@ -331,22 +747,6 @@ tailwind.config = { corePlugins: { preflight: false } };
             }).then(function (r) { return !!r.isConfirmed; });
         }
         return Promise.resolve(window.confirm(texto));
-    }
-
-    function recargarGrilla() {
-        return fetch(window.location.href, {
-            credentials: 'same-origin',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        })
-        .then(function (r) { return r.text(); })
-        .then(function (html) {
-            var doc = new DOMParser().parseFromString(html, 'text/html');
-            ['nn-tbody', 'nn-paginacion', 'nn-resumen'].forEach(function (id) {
-                var nuevo = doc.getElementById(id);
-                var actual = document.getElementById(id);
-                if (nuevo && actual) actual.replaceWith(nuevo);
-            });
-        });
     }
 
     form.addEventListener('submit', function (ev) {
@@ -395,7 +795,7 @@ tailwind.config = { corePlugins: { preflight: false } };
                         var inst = window.bootstrap.Modal.getInstance(modalEl);
                         if (inst) inst.hide();
                     }
-                    return recargarGrilla().then(function () {
+                    return window.nnRecargarGrilla().then(function () {
                         if (window.Swal) {
                             window.Swal.fire({
                                 icon: 'success',

@@ -194,9 +194,14 @@ switch ($route) {
         $controller = new NomenclaController();
         $action     = trim($_GET['action'] ?? '');
         switch ($action) {
-            case 'borrar_rango': $controller->borrarPorRango();  break;
-            case 'accion':       $controller->accionSensibles(); break;
-            default:             $controller->index();           break;
+            case 'borrar_rango':         $controller->borrarPorRango();       break;
+            case 'obtener_nomenclador':  $controller->obtenerNomenclador();   break;
+            case 'validar_codigo':       $controller->validarCodigo();        break;
+            case 'catalogo_nomenclador': $controller->catalogoNomenclador();  break;
+            case 'guardar_nomenclador':  $controller->guardarNomenclador();   break;
+            case 'actualizar_descripciones': $controller->actualizarDescripciones(); break;
+            case 'accion':               $controller->accionSensibles();      break;
+            default:                     $controller->index();                break;
         }
         break;
 
