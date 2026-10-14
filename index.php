@@ -194,8 +194,9 @@ switch ($route) {
         $controller = new NomenclaController();
         $action     = trim($_GET['action'] ?? '');
         switch ($action) {
-            case 'accion': $controller->accionSensibles(); break;
-            default:       $controller->index();           break;
+            case 'borrar_rango': $controller->borrarPorRango();  break;
+            case 'accion':       $controller->accionSensibles(); break;
+            default:             $controller->index();           break;
         }
         break;
 

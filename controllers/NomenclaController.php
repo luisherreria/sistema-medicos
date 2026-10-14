@@ -90,6 +90,12 @@ class NomenclaController
         $totalPaginas = $total > 0 ? (int) ceil($total / $limite) : 1;
         if ($pagina > $totalPaginas) {
             $pagina = $totalPaginas;
+            try {
+                $registros = $model->listarNomenclador($busqueda, $pagina, $limite, $ordenCol, $ordenDir);
+            } catch (PDOException $e) {
+                error_log('NomenclaController::index reconsulta — ' . $e->getMessage());
+                $registros = [];
+            }
         }
 
         // Enlaces de ordenamiento: alternar ASC/DESC por columna
@@ -117,6 +123,74 @@ class NomenclaController
         ];
 
         require_once __DIR__ . '/../views/nomencla_list.php';
+    }
+
+    /**
+     * POST AJAX ?route=nomenclador&action=borrar_rango
+     * Campos: desde, hasta, confirmar_prestadores, csrf_token
+     */
+    public function borrarPorRango(): void
+    {
+        $this->requireAuthJson();
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['ok' => false, 'msg' => 'Método no permitido.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $token = (string) ($_POST['csrf_token'] ?? '');
+        $esper = (string) ($_SESSION['csrf_token'] ?? '');
+        if ($esper === '' || !hash_equals($esper, $token)) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'msg' => 'Token de seguridad inválido. Recargue la página.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $model  = new NomenclaModel();
+        $userId = (int) ($_SESSION['user_id'] ?? $_SESSION['user']['id'] ?? 0);
+        if (!$this->checkPermisoAccion($model, $userId, 'borrar_nomenclador')
+            && !$model->tienePermiso($userId, 'MNU_ARC_NOMENCLADOR')
+            && !$this->tienePermisoSesion('MNU_ARC_NOMENCLADOR')) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'msg' => 'Sin permiso para borrar prácticas del nomenclador.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $desde = trim((string) ($_POST['desde'] ?? ''));
+        $hasta = trim((string) ($_POST['hasta'] ?? ''));
+        if ($desde === '' || $hasta === '') {
+            http_response_code(422);
+            echo json_encode(['ok' => false, 'msg' => 'Los campos Desde y Hasta son obligatorios.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $confirmar = filter_var($_POST['confirmar_prestadores'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $usuario   = trim((string) (
+            $_SESSION['user']['username']
+            ?? $_SESSION['user']['full_name']
+            ?? ('user-' . $userId)
+        ));
+
+        try {
+            $model->borrarPorRango($desde, $hasta, $confirmar, $userId, $usuario);
+            $msg = $confirmar
+                ? 'Prácticas eliminadas correctamente del nomenclador, prestadores y sucursales.'
+                : 'Prácticas eliminadas correctamente del nomenclador.';
+            echo json_encode(['ok' => true, 'msg' => $msg], JSON_UNESCAPED_UNICODE);
+        } catch (InvalidArgumentException $e) {
+            http_response_code(422);
+            echo json_encode(['ok' => false, 'msg' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        } catch (Throwable $e) {
+            error_log('NomenclaController::borrarPorRango — ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode([
+                'ok'  => false,
+                'msg' => 'No se pudo completar el borrado. La operación fue revertida.',
+            ], JSON_UNESCAPED_UNICODE);
+        }
+        exit;
     }
 
     /**
@@ -200,6 +274,16 @@ class NomenclaController
     {
         if (empty($_SESSION['user'])) {
             header('Location: ' . $this->baseUrl() . '?route=login');
+            exit;
+        }
+    }
+
+    private function requireAuthJson(): void
+    {
+        if (empty($_SESSION['user'])) {
+            http_response_code(401);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'msg' => 'Sesión expirada. Recargue la página.'], JSON_UNESCAPED_UNICODE);
             exit;
         }
     }

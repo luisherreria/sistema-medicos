@@ -171,7 +171,7 @@ tailwind.config = { corePlugins: { preflight: false } };
                 Limpiar
             </a>
             <?php endif; ?>
-            <span class="text-xs text-slate-500 ms-auto">
+            <span id="nn-resumen" class="text-xs text-slate-500 ms-auto">
                 <?= number_format($total, 0, ',', '.') ?> registro<?= $total === 1 ? '' : 's' ?>
                 · pág. <?= $pagina ?>/<?= $totalPaginas ?>
             </span>
@@ -201,7 +201,7 @@ tailwind.config = { corePlugins: { preflight: false } };
                     <?php endforeach; ?>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="nn-tbody">
             <?php if (empty($registros)): ?>
                 <tr>
                     <td colspan="<?= count($cols) ?>" class="p-4 text-center text-slate-400">
@@ -243,7 +243,7 @@ tailwind.config = { corePlugins: { preflight: false } };
     $desde   = max(1, $pagina - $ventana);
     $hasta   = min($totalPaginas, $pagina + $ventana);
     ?>
-    <div class="flex flex-wrap items-center justify-between gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm">
+    <div id="nn-paginacion" class="flex flex-wrap items-center justify-between gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm">
         <div class="text-xs text-slate-500">
             Mostrando <?= $total === 0 ? 0 : (($pagina - 1) * $limite + 1) ?>–
             <?= min($pagina * $limite, $total) ?> de <?= number_format($total, 0, ',', '.') ?>
@@ -281,15 +281,138 @@ tailwind.config = { corePlugins: { preflight: false } };
     </div>
 </div>
 
+<?php if ($puedeBorrar): ?>
+<?php require __DIR__ . '/nomencla/_modal_borrar_rango.php'; ?>
+<?php endif; ?>
+
 <script>
 (function () {
-    // Placeholders de acciones (CRUD se implementa en siguientes pasos)
-    ['nn-btn-agregar', 'nn-btn-borrar', 'nn-btn-editar', 'nn-btn-actualizar'].forEach(function (id) {
+    ['nn-btn-agregar', 'nn-btn-editar', 'nn-btn-actualizar'].forEach(function (id) {
         var btn = document.getElementById(id);
         if (!btn) return;
         btn.addEventListener('click', function () {
             alert('Acción pendiente de implementar: ' + (btn.textContent || '').trim());
         });
+    });
+
+    var btnBorrar = document.getElementById('nn-btn-borrar');
+    var form = document.getElementById('form-borrar-rango');
+    if (!btnBorrar || !form) return;
+
+    btnBorrar.addEventListener('click', function () {
+        form.reset();
+        var err = document.getElementById('nn-borrar-error');
+        if (err) err.style.display = 'none';
+        var modalEl = document.getElementById('modalBorrarRango');
+        if (modalEl && window.bootstrap) {
+            window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        }
+    });
+
+    function mostrarError(texto) {
+        var err = document.getElementById('nn-borrar-error');
+        if (!err) return;
+        err.textContent = texto;
+        err.style.display = texto ? 'block' : 'none';
+    }
+
+    function confirmar(texto) {
+        if (window.Swal) {
+            return window.Swal.fire({
+                icon: 'warning',
+                title: 'Confirmar borrado',
+                text: texto,
+                showCancelButton: true,
+                confirmButtonText: 'Sí',
+                cancelButtonText: 'No',
+                confirmButtonColor: '#b91c1c',
+                reverseButtons: true,
+                focusCancel: true
+            }).then(function (r) { return !!r.isConfirmed; });
+        }
+        return Promise.resolve(window.confirm(texto));
+    }
+
+    function recargarGrilla() {
+        return fetch(window.location.href, {
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function (r) { return r.text(); })
+        .then(function (html) {
+            var doc = new DOMParser().parseFromString(html, 'text/html');
+            ['nn-tbody', 'nn-paginacion', 'nn-resumen'].forEach(function (id) {
+                var nuevo = doc.getElementById(id);
+                var actual = document.getElementById(id);
+                if (nuevo && actual) actual.replaceWith(nuevo);
+            });
+        });
+    }
+
+    form.addEventListener('submit', function (ev) {
+        ev.preventDefault();
+        mostrarError('');
+
+        var desde = (document.getElementById('nn-borrar-desde').value || '').trim();
+        var hasta = (document.getElementById('nn-borrar-hasta').value || '').trim();
+        if (!desde || !hasta) {
+            mostrarError('Los campos Desde y Hasta son obligatorios.');
+            return;
+        }
+        if (desde > hasta) {
+            mostrarError('El código Desde no puede ser mayor que el código Hasta.');
+            return;
+        }
+
+        var submit = document.getElementById('nn-borrar-submit');
+        confirmar('¿Confirma el borrado en el NOMENCLADOR? Esta acción no podrá deshacerse.')
+            .then(function (okNomencla) {
+                if (!okNomencla) return null;
+                return confirmar('¿Confirma también el borrado en el prestador y de sus sucursales?');
+            })
+            .then(function (okPrestadores) {
+                if (okPrestadores === null || okPrestadores === undefined) return;
+                if (submit) submit.disabled = true;
+
+                var datos = new FormData(form);
+                datos.set('desde', desde);
+                datos.set('hasta', hasta);
+                datos.set('confirmar_prestadores', okPrestadores ? '1' : '0');
+
+                return fetch('index.php?route=nomenclador&action=borrar_rango', {
+                    method: 'POST',
+                    body: datos,
+                    credentials: 'same-origin',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
+                .then(function (res) {
+                    if (!res.body || !res.body.ok) {
+                        throw new Error((res.body && res.body.msg) || 'No se pudo completar el borrado.');
+                    }
+                    var modalEl = document.getElementById('modalBorrarRango');
+                    if (modalEl && window.bootstrap) {
+                        var inst = window.bootstrap.Modal.getInstance(modalEl);
+                        if (inst) inst.hide();
+                    }
+                    return recargarGrilla().then(function () {
+                        if (window.Swal) {
+                            window.Swal.fire({
+                                icon: 'success',
+                                title: 'Listo',
+                                text: res.body.msg,
+                                confirmButtonColor: '#0d47a1'
+                            });
+                        }
+                    });
+                });
+            })
+            .catch(function (err) {
+                mostrarError(err && err.message ? err.message : 'No se pudo completar el borrado.');
+            })
+            .finally(function () {
+                if (submit) submit.disabled = false;
+            });
     });
 })();
 </script>
