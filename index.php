@@ -42,6 +42,7 @@ require_once __DIR__ . '/controllers/RegistrfController.php';
 require_once __DIR__ . '/controllers/RegistrfPdfController.php';
 require_once __DIR__ . '/controllers/CpManuscritoController.php';
 require_once __DIR__ . '/controllers/NomenclaController.php';
+require_once __DIR__ . '/controllers/NomenclaImportController.php';
 require_once __DIR__ . '/controllers/TablaGeneralController.php';
 require_once __DIR__ . '/controllers/PlantillasEmailsController.php';
 
@@ -200,6 +201,10 @@ switch ($route) {
             case 'catalogo_nomenclador': $controller->catalogoNomenclador();  break;
             case 'guardar_nomenclador':  $controller->guardarNomenclador();   break;
             case 'actualizar_descripciones': $controller->actualizarDescripciones(); break;
+            case 'importar_prestador':   (new NomenclaImportController())->validarPrestador(); break;
+            case 'importar_procesar':    (new NomenclaImportController())->procesar(); break;
+            case 'importar_sucursales':  (new NomenclaImportController())->grabarSucursales(); break;
+            case 'importar_omitir_sucursales': (new NomenclaImportController())->omitirSucursales(); break;
             case 'accion':               $controller->accionSensibles();      break;
             default:                     $controller->index();                break;
         }

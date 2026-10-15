@@ -299,6 +299,9 @@ tailwind.config = { corePlugins: { preflight: false } };
 <?php if ($puedeEditar || $puedeAgregar): ?>
 <?php require __DIR__ . '/nomencla/_modal_editar_nomenclador.php'; ?>
 <?php endif; ?>
+<?php if ($puedeImportar): ?>
+<?php require __DIR__ . '/nomencla/_modal_importar.php'; ?>
+<?php endif; ?>
 
 <style>
 #nn-tabla tr.nn-fila-sel { background: #dbeafe !important; }
@@ -366,7 +369,10 @@ function actualizarDescripcionGrupo() {
     var btnImportar = document.getElementById('nn-btn-importar');
     if (btnImportar) {
         btnImportar.addEventListener('click', function () {
-            alert('Acción pendiente de implementar: ' + (btnImportar.textContent || '').trim());
+            var el = document.getElementById('modalImportarNomenclador');
+            if (el && window.bootstrap) {
+                window.bootstrap.Modal.getOrCreateInstance(el).show();
+            }
         });
     }
 
