@@ -32,8 +32,8 @@ class Permission
                     p.NOMBRE_PERMISO,
                     p.CLAVE_CATEGORIA,
                     p.DESCRIPCION
-                FROM users_permissions up
-                INNER JOIN permisos p ON up.PERMISSION_ID = p.CLAVE
+                FROM vfpmedicos.users_permissions up
+                INNER JOIN vfpmedicos.permisos p ON up.PERMISSION_ID = p.CLAVE
                 WHERE up.USER_ID   = :user_id
                   AND up.ADDED     = 1
                   AND (up.REMOVED  = 0 OR up.REMOVED IS NULL)
@@ -136,6 +136,7 @@ class Permission
             // Convenios / Obras Sociales
             'MNU_CONVENIOS'             => 'fa-solid fa-handshake',
             'MNU_OBRAS_SOCIALES'        => 'fa-solid fa-building-columns',
+            'MNU_ARC_OBRASSOCIALES'     => 'fa-solid fa-building-columns',
             // Negociaciones
             'MNU_NEGOCIACIONES'         => 'fa-solid fa-scale-balanced',
             // Expedientes
@@ -334,6 +335,7 @@ class Permission
             'MNU_ARC_PRESTADORES'     => 'prestadores',
             'MNU_ARC_ESPECIALIDADES'  => 'especialidades',
             'MNU_ARC_OBRAS_SOCIALES'  => 'obras-sociales',
+            'MNU_ARC_OBRASSOCIALES'   => 'obras-sociales',
             'MNU_ARC_NOMENCLADOR'     => 'nomenclador',
             'MNU_ARC_NBU'             => 'nbu',
             'MNU_ARC_KAIROS'          => 'kairos',
@@ -583,7 +585,7 @@ class Permission
                 'children' => [
                     ['type'=>'item','clave'=>'MNU_ARC_PRESTADORES',   'label'=>'Prestadores',         'route'=>'prestadores','icon'=>'fa-solid fa-stethoscope'],
                     ['type'=>'item','clave'=>'MNU_ARC_ESPECIALIDADES', 'label'=>'Especialidades',       'icon'=>'fa-solid fa-briefcase-medical'],
-                    ['type'=>'item','clave'=>'MNU_ARC_OBRAS_SOCIALES', 'label'=>'Obras Sociales',       'icon'=>'fa-solid fa-building-columns'],
+                    ['type'=>'item','clave'=>'MNU_ARC_OBRASSOCIALES', 'label'=>'Obras Sociales', 'route'=>'obras-sociales', 'icon'=>'fa-solid fa-building-columns'],
                     ['type'=>'item','clave'=>'MNU_ARC_NOMENCLADOR',   'label'=>'Nomenclador Nacional', 'icon'=>'fa-solid fa-book-medical'],
                     ['type'=>'item','clave'=>'MNU_ARC_NBU',           'label'=>'NBU',                  'icon'=>'fa-solid fa-file-medical'],
                     ['type'=>'item','clave'=>'MNU_ARC_KAIROS',        'label'=>'Kairos',               'icon'=>'fa-solid fa-clock-rotate-left'],

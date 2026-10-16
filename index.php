@@ -9,6 +9,7 @@
  *   login   (GET)        → AuthController::showLogin()
  *   login   (POST)       → AuthController::login()
  *   logout               → AuthController::logout()
+ *   obras_sociales       → ObrasSocialesController (también obras-sociales)
  * ─────────────────────────────────────────────────────────────────────────
  */
 
@@ -45,6 +46,7 @@ require_once __DIR__ . '/controllers/NomenclaController.php';
 require_once __DIR__ . '/controllers/NomenclaImportController.php';
 require_once __DIR__ . '/controllers/TablaGeneralController.php';
 require_once __DIR__ . '/controllers/PlantillasEmailsController.php';
+require_once __DIR__ . '/controllers/ObrasSocialesController.php';
 
 // ── 5. Resolución de ruta ─────────────────────────────────────────────────
 $route  = trim($_GET['route'] ?? '');
@@ -257,6 +259,25 @@ switch ($route) {
             case 'obtener':  $controller->obtener();  break;
             case 'eliminar': $controller->eliminar(); break;
             default:         $controller->index();    break;
+        }
+        break;
+
+    // ── Módulo Obras Sociales (Archivos → Obras Sociales) ────────────────
+    case 'obras_sociales':
+    case 'obras-sociales':
+    case 'MNU_ARC_OBRAS_SOCIALES':
+    case 'MNU_ARC_OBRASSOCIALES':
+    case 'mnu-arc-obrassociales':
+        $controller = new ObrasSocialesController();
+        $action     = trim($_GET['action'] ?? '');
+        switch ($action) {
+            case 'listar':  $controller->listar();  break;
+            case 'obtener': $controller->obtener(); break;
+            case 'guardar':   $controller->guardar();   break;
+            case 'cierre':    $controller->cierre();    break;
+            case 'eliminar':       $controller->eliminar();      break;
+            case 'subir_archivo':  $controller->subirArchivo();  break;
+            default:               $controller->index();         break;
         }
         break;
 

@@ -399,6 +399,7 @@ $totalCategorias  = count(array_unique(array_column($permisos, 'CLAVE_CATEGORIA'
         'MNU_ARC_PRESTADORES'    : 'fa-solid fa-stethoscope',
         'MNU_ARC_ESPECIALIDADES' : 'fa-solid fa-briefcase-medical',
         'MNU_ARC_OBRAS_SOCIALES' : 'fa-solid fa-building-columns',
+        'MNU_ARC_OBRASSOCIALES'  : 'fa-solid fa-building-columns',
         'MNU_ARC_NOMENCLADOR'    : 'fa-solid fa-book-medical',
         'MNU_ARC_NBU'            : 'fa-solid fa-file-medical',
         'MNU_ARC_KAIROS'         : 'fa-solid fa-clock-rotate-left',
