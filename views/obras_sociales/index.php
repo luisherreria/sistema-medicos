@@ -321,7 +321,30 @@ document.addEventListener('DOMContentLoaded', function () {
         $('#osCosegCon, #osCosegPra, #osCosegDet, #osCapita, #osRefact').val('0.00');
         $('#modalObraSocialTitulo').text('Agregar Obra Social');
         $('#osAfilAdh').text('—');
+        mostrarLogoObra('');
         sincronizarRutas();
+    }
+
+    function mostrarLogoObra(codigo) {
+        codigo = $.trim(codigo || '');
+        var inicial = codigo ? codigo.charAt(0).toUpperCase() : 'O';
+        var $inicial = $('#osAvatarInicial').text(inicial).show();
+        var $img = $('#osLogoImg');
+        $img.hide().off('load error').attr('alt', codigo || 'Obra social');
+        if (!codigo) {
+            $img.attr('src', '');
+            return;
+        }
+        var ruta = 'public/uploads/obrassoc/' + encodeURIComponent(codigo.toLowerCase()) + '.png';
+        $img.on('load', function () {
+            if (this.naturalWidth > 0) {
+                $(this).show();
+                $inicial.hide();
+            }
+        }).on('error', function () {
+            $(this).hide();
+            $inicial.show();
+        }).attr('src', ruta);
     }
 
     function archivoPublicoObra(valor) {
@@ -521,6 +544,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 aplicarFicha(d);
                 $('#osCodigo').prop('readonly', true);
                 $('#modalObraSocialTitulo').text('Datos de la Obra Social — ' + (d.TACODIGO || ''));
+                mostrarLogoObra(d.TACODIGO || '');
                 modalOS.show();
             },
             error: function (xhr) {
@@ -541,6 +565,12 @@ document.addEventListener('DOMContentLoaded', function () {
     $('#chkMostrarInactivas').on('change', function () {
         tablaOS.page.len(this.checked ? 50 : 25);
         cargarObrasSociales();
+    });
+
+    $('#osCodigo').on('input', function () {
+        if ($('#osModo').val() === 'alta') {
+            mostrarLogoObra(this.value);
+        }
     });
 
     $('#btnAgregarOS').on('click', abrirAlta);

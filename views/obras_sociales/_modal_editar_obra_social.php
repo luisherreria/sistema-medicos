@@ -18,13 +18,47 @@ $csrfToken = (string) ($csrfToken ?? '');
     background: #e3f2fd;
     border-radius: 0.5rem;
 }
+#modalObraSocial .os-logo {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    background: #1976d2;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1rem;
+    line-height: 1;
+    flex-shrink: 0;
+    position: relative;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .08);
+}
+#modalObraSocial .os-logo img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #fff;
+    padding: 2px;
+    display: none;
+}
 </style>
 <div class="modal fade" id="modalObraSocial" tabindex="-1" aria-labelledby="modalObraSocialTitulo" aria-hidden="true">
     <div class="modal-dialog modal-dialog-scrollable" style="max-width:1320px;width:96vw">
         <div class="modal-content" style="height:100%">
             <form id="frmObraSocial" autocomplete="off" class="d-flex flex-column h-100" style="min-height:0;overflow:hidden">
                 <div class="modal-header flex-shrink-0">
-                    <h5 class="modal-title" id="modalObraSocialTitulo">Datos de la Obra Social</h5>
+                    <div class="d-flex align-items-center gap-2 min-w-0">
+                        <div class="os-logo" id="osLogoWrap" title="Logo de la obra social">
+                            <span id="osAvatarInicial">O</span>
+                            <img id="osLogoImg" alt="" src="">
+                        </div>
+                        <h5 class="modal-title text-truncate" id="modalObraSocialTitulo">Datos de la Obra Social</h5>
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                 </div>
                 <div class="modal-body" style="overflow-y:auto;flex:1 1 auto;min-height:0">
