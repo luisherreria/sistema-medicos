@@ -40,6 +40,9 @@ require_once __DIR__ . '/../layouts/header.php';
             <button class="btn btn-outline-warning text-dark" id="btnCierrePeriodo" type="button">
                 <i class="bi bi-calendar-check me-1"></i> Cierre de Período
             </button>
+            <button class="btn btn-outline-primary" id="btnImportarPadron" type="button">
+                <i class="fa-solid fa-file-import me-1"></i> Importar padrón
+            </button>
 
             <div class="form-check form-switch ms-3 align-self-center">
                 <input class="form-check-input" type="checkbox" id="chkMostrarInactivas">
@@ -69,6 +72,7 @@ require_once __DIR__ . '/../layouts/header.php';
 </div>
 
 <?php require __DIR__ . '/_modal_editar_obra_social.php'; ?>
+<?php require __DIR__ . '/_modal_importar_padron.php'; ?>
 
 <div class="modal fade" id="modalCierrePeriodo" tabindex="-1" aria-labelledby="modalCierreTitulo" aria-hidden="true">
     <div class="modal-dialog">
@@ -117,6 +121,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var CSRF = <?= json_encode($csrfToken, JSON_UNESCAPED_UNICODE) ?>;
     var modalOS = new bootstrap.Modal(document.getElementById('modalObraSocial'));
     var modalCierre = new bootstrap.Modal(document.getElementById('modalCierrePeriodo'));
+    var modalImportar = new bootstrap.Modal(document.getElementById('modalImportarPadron'));
     var codigosCargados = [];
 
     var tablaOS = $('#tablaObrasSociales').DataTable({
@@ -574,6 +579,235 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     $('#btnAgregarOS').on('click', abrirAlta);
+
+    function periodoPadronValido(valor) {
+        if (!/^\d{2}\/\d{2}$/.test(valor)) {
+            return 'Use el formato AA/MM.';
+        }
+        var aa = parseInt(valor.slice(0, 2), 10);
+        var mm = parseInt(valor.slice(3, 5), 10);
+        var maxAa = (new Date().getFullYear() + 1) % 100;
+        if (mm < 1 || mm > 12) {
+            return 'El mes debe estar entre 01 y 12.';
+        }
+        if (aa > maxAa) {
+            return 'El año no puede ser posterior a ' + ('0' + maxAa).slice(-2) + '.';
+        }
+        return '';
+    }
+
+    function marcarPeriodoPadron() {
+        var error = periodoPadronValido($.trim($('#impPeriodo').val()));
+        $('#impPeriodoError').toggleClass('d-none', error === '').text(error);
+        return error === '';
+    }
+
+    function datosImportarListos() {
+        var obrasoc = $.trim($('#impObrasoc').val());
+        var npadron = $.trim($('#impNpadron').val());
+        return obrasoc !== '' && $('#impObrasoc').data('valida') === 1 && npadron !== '' && marcarPeriodoPadron();
+    }
+
+    function limpiarPreviewPadron() {
+        $('#impResumen').addClass('d-none');
+        $('#impResumenTexto').text('');
+        $('#impPreviewBody').empty();
+        $('#btnConfirmarPadron').prop('disabled', true);
+    }
+
+    function cargarObrasImportar() {
+        $.getJSON('index.php?route=obras_sociales&action=listar', { incluir_inactivas: 0 }, function (res) {
+            var lista = document.getElementById('listaImportOs');
+            if (!lista || !res || !res.ok) {
+                return;
+            }
+            lista.innerHTML = '';
+            (res.data || []).forEach(function (fila) {
+                var opt = document.createElement('option');
+                opt.value = fila.TACODIGO || '';
+                opt.label = fila.TADESCRIP || '';
+                lista.appendChild(opt);
+            });
+        });
+    }
+
+    function validarObraImportar() {
+        var codigo = $.trim($('#impObrasoc').val());
+        $('#impObrasoc').data('valida', 0);
+        $('#impObraNombre').removeClass('text-danger text-success').text('Seleccione un código vigente.');
+        limpiarPreviewPadron();
+        if (codigo === '') {
+            return;
+        }
+        $.getJSON('index.php?route=obras_sociales&action=obtener', { codigo: codigo }, function (res) {
+            if (!res || !res.ok || !res.data) {
+                $('#impObraNombre').addClass('text-danger').text('La obra social no existe.');
+                return;
+            }
+            $('#impObrasoc').data('valida', 1);
+            $('#impObraNombre').addClass('text-success').text(res.data.TADESCRIP || codigo);
+        }).fail(function () {
+            $('#impObraNombre').addClass('text-danger').text('La obra social no existe.');
+        });
+    }
+
+    function preleerPadron(archivo) {
+        if (!archivo) {
+            return;
+        }
+        if (!datosImportarListos()) {
+            Swal.fire({ icon: 'warning', title: 'Importar padrón', text: 'Complete obra social, nombre del padrón y un período AA/MM válido.' });
+            return;
+        }
+        $('#impArchivoNombre').text(archivo.name);
+        var fd = new FormData();
+        fd.append('csrf_token', CSRF);
+        fd.append('obrasoc', $.trim($('#impObrasoc').val()));
+        fd.append('npadron', $.trim($('#impNpadron').val()));
+        fd.append('periodo', $.trim($('#impPeriodo').val()));
+        fd.append('fbaj', $('#impFbaj').val() || '');
+        fd.append('archivo', archivo);
+        $('#btnConfirmarPadron').prop('disabled', true);
+        $.ajax({
+            url: 'index.php?route=obras_sociales&action=previsualizar_padron',
+            type: 'POST',
+            data: fd,
+            processData: false,
+            contentType: false,
+            dataType: 'json',
+            success: function (res) {
+                if (!res || !res.ok) {
+                    limpiarPreviewPadron();
+                    Swal.fire({ icon: 'error', title: 'Importar padrón', text: (res && res.msg) ? res.msg : 'No se pudo leer el archivo.' });
+                    return;
+                }
+                var bajas = res.bajas ? ' Se descartaron ' + res.bajas + ' bajas.' : '';
+                $('#impResumenTexto').text(res.msg + bajas);
+                var $body = $('#impPreviewBody').empty();
+                (res.preview || []).forEach(function (fila) {
+                    $body.append(
+                        '<tr><td>' + $('<div>').text(fila.NROAFILIAD || '').html() + '</td>' +
+                        '<td>' + $('<div>').text(fila.CODADH || '').html() + '</td>' +
+                        '<td>' + $('<div>').text(fila.NOMBRE || '').html() + '</td>' +
+                        '<td>' + $('<div>').text(fila.NRODOC || '').html() + '</td>' +
+                        '<td>' + $('<div>').text(fila.PLAN || '').html() + '</td>' +
+                        '<td>' + $('<div>').text(fila.ESTADO || '').html() + '</td>' +
+                        '<td>' + $('<div>').text(fila.FBAJ || '').html() + '</td></tr>'
+                    );
+                });
+                if (!(res.preview || []).length) {
+                    $body.append('<tr><td colspan="7" class="text-muted">No hay registros activos para mostrar.</td></tr>');
+                }
+                $('#impResumen').removeClass('d-none');
+                $('#btnConfirmarPadron').prop('disabled', !(res.activos > 0));
+            },
+            error: function (xhr) {
+                limpiarPreviewPadron();
+                var msg = (xhr.responseJSON && xhr.responseJSON.msg) ? xhr.responseJSON.msg : 'No se pudo leer el archivo.';
+                Swal.fire({ icon: 'error', title: 'Importar padrón', text: msg });
+            }
+        });
+    }
+
+    $('#btnImportarPadron').on('click', function () {
+        document.getElementById('frmImportarPadron').reset();
+        $('#impObrasoc').data('valida', 0);
+        $('#impObraNombre').removeClass('text-danger text-success').text('Seleccione un código vigente.');
+        $('#impArchivoNombre').text('');
+        $('#impPeriodoError').addClass('d-none').text('');
+        limpiarPreviewPadron();
+        cargarObrasImportar();
+        modalImportar.show();
+    });
+
+    $('#impPeriodo').on('input', function () {
+        var digitos = this.value.replace(/\D/g, '').slice(0, 4);
+        this.value = digitos.length > 2 ? digitos.slice(0, 2) + '/' + digitos.slice(2) : digitos;
+        marcarPeriodoPadron();
+        limpiarPreviewPadron();
+    });
+    $('#impNpadron, #impFbaj').on('input change', limpiarPreviewPadron);
+    $('#impObrasoc').on('change blur', validarObraImportar);
+    $('#dropPadron').on('click', function (e) {
+        if (e.target.id === 'filePadronImp') {
+            return;
+        }
+        $('#filePadronImp').trigger('click');
+    });
+    $('#filePadronImp').on('change', function () {
+        var archivo = this.files && this.files[0];
+        if (archivo) {
+            preleerPadron(archivo);
+        }
+        this.value = '';
+    });
+    (function () {
+        var zona = document.getElementById('dropPadron');
+        if (!zona) {
+            return;
+        }
+        zona.addEventListener('dragover', function (e) {
+            e.preventDefault();
+            zona.classList.add('os-drop-on');
+        });
+        zona.addEventListener('dragleave', function () {
+            zona.classList.remove('os-drop-on');
+        });
+        zona.addEventListener('drop', function (e) {
+            e.preventDefault();
+            zona.classList.remove('os-drop-on');
+            var archivo = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+            if (archivo) {
+                preleerPadron(archivo);
+            }
+        });
+    }());
+    $('#btnConfirmarPadron').on('click', function () {
+        if (!datosImportarListos()) {
+            return;
+        }
+        var detalle = 'Se importarán los afiliados activos de ' + $.trim($('#impObrasoc').val()) + ' para el período ' + $.trim($('#impPeriodo').val()) + '.';
+        Swal.fire({
+            icon: 'question',
+            title: 'Confirmar importación',
+            text: detalle,
+            showCancelButton: true,
+            confirmButtonText: 'Importar',
+            cancelButtonText: 'Cancelar'
+        }).then(function (result) {
+            if (!result.isConfirmed) {
+                return;
+            }
+            var $btn = $('#btnConfirmarPadron').prop('disabled', true);
+            $.ajax({
+                url: 'index.php?route=obras_sociales&action=confirmar_padron',
+                type: 'POST',
+                dataType: 'json',
+                data: {
+                    csrf_token: CSRF,
+                    obrasoc: $.trim($('#impObrasoc').val()),
+                    npadron: $.trim($('#impNpadron').val()),
+                    periodo: $.trim($('#impPeriodo').val()),
+                    fbaj: $('#impFbaj').val() || ''
+                },
+                success: function (res) {
+                    if (!res || !res.ok) {
+                        $btn.prop('disabled', false);
+                        Swal.fire({ icon: 'error', title: 'Importar padrón', text: (res && res.msg) ? res.msg : 'No se pudo importar.' });
+                        return;
+                    }
+                    modalImportar.hide();
+                    Swal.fire({ icon: 'success', title: 'Importar padrón', text: res.msg });
+                    cargarObrasSociales();
+                },
+                error: function (xhr) {
+                    $btn.prop('disabled', false);
+                    var msg = (xhr.responseJSON && xhr.responseJSON.msg) ? xhr.responseJSON.msg : 'No se pudo importar.';
+                    Swal.fire({ icon: 'error', title: 'Importar padrón', text: msg });
+                }
+            });
+        });
+    });
 
     $('#btnCierrePeriodo').on('click', function () {
         document.getElementById('frmCierrePeriodo').reset();

@@ -1,0 +1,5 @@
+# Evita que se descarguen los padrones temporales
+<FilesMatch ".*">
+    Deny from all
+</FilesMatch>
+Options -Indexes

@@ -276,7 +276,9 @@ switch ($route) {
             case 'guardar':   $controller->guardar();   break;
             case 'cierre':    $controller->cierre();    break;
             case 'eliminar':       $controller->eliminar();      break;
-            case 'subir_archivo':  $controller->subirArchivo();  break;
+            case 'subir_archivo':          $controller->subirArchivo();          break;
+            case 'previsualizar_padron':   $controller->previsualizarPadron();   break;
+            case 'confirmar_padron':       $controller->confirmarPadron();       break;
             default:               $controller->index();         break;
         }
         break;
