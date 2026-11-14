@@ -4,6 +4,10 @@
  * ─────────────────────────────────────────────────────────────────────────
  * Sistema Médico COMEDICA
  *
+ * Dialecto PHP 5.6 (hosting). Sin declare(strict_types), sin ??, sin
+ * random_bytes(), sin tipos 7.x. Los controllers se cargan dentro del
+ * case de la ruta para que Prestadores/Chat 7.4 no rompan login.
+ *
  * Rutas disponibles (?route=):
  *   (vacío) / dashboard  → DashboardController::index()
  *   login   (GET)        → AuthController::showLogin()
@@ -11,8 +15,6 @@
  *   logout               → AuthController::logout()
  * ─────────────────────────────────────────────────────────────────────────
  */
-
-declare(strict_types=1);
 
 // ── 1. Configuración de errores (ajustar en producción) ──────────────────
 ini_set('display_errors', '1');
@@ -29,30 +31,38 @@ if (session_status() === PHP_SESSION_NONE) {
 
 // ── 3. CSRF token (generarlo si no existe) ────────────────────────────────
 if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    if (function_exists('openssl_random_pseudo_bytes')) {
+        $_SESSION['csrf_token'] = bin2hex(openssl_random_pseudo_bytes(32));
+    } else {
+        $_SESSION['csrf_token'] = md5(uniqid((string) mt_rand(), true));
+    }
 }
 
-// ── 4. Autoload de controladores ─────────────────────────────────────────
-require_once __DIR__ . '/controllers/AuthController.php';
-require_once __DIR__ . '/controllers/DashboardController.php';
-require_once __DIR__ . '/controllers/PrestadoresController.php';
-require_once __DIR__ . '/controllers/ChatController.php';
-require_once __DIR__ . '/controllers/PlantillasEmailsController.php';
+// ── 4. Resolución de ruta (lazy-load de controllers en cada case) ────────
+$route  = isset($_GET['route']) ? trim($_GET['route']) : '';
+$method = isset($_SERVER['REQUEST_METHOD']) ? strtoupper($_SERVER['REQUEST_METHOD']) : 'GET';
 
-// ── 5. Resolución de ruta ─────────────────────────────────────────────────
-$route  = trim($_GET['route'] ?? '');
-$method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
+/**
+ * Carga un controller solo cuando la ruta lo necesita.
+ *
+ * @param string $file Nombre de archivo dentro de controllers/
+ */
+function requireController($file)
+{
+    require_once __DIR__ . '/controllers/' . $file;
+}
 
-// ── 6. Dispatch ───────────────────────────────────────────────────────────
+// ── 5. Dispatch ───────────────────────────────────────────────────────────
 switch ($route) {
 
     // ── Login ──────────────────────────────────────────────────────────────
     case 'login':
+        requireController('AuthController.php');
         $controller = new AuthController();
         if ($method === 'POST') {
-            // Validación CSRF
-            $tokenPost = $_POST['csrf_token'] ?? '';
-            if (!hash_equals($_SESSION['csrf_token'], $tokenPost)) {
+            $tokenPost = isset($_POST['csrf_token']) ? $_POST['csrf_token'] : '';
+            $tokenSess = isset($_SESSION['csrf_token']) ? $_SESSION['csrf_token'] : '';
+            if ($tokenSess === '' || $tokenPost === '' || !hash_equals($tokenSess, $tokenPost)) {
                 $_SESSION['login_error'] = 'Token de seguridad inválido. Recargue la página.';
                 header('Location: ' . getBaseUrl() . '?route=login');
                 exit;
@@ -65,6 +75,7 @@ switch ($route) {
 
     // ── Logout ─────────────────────────────────────────────────────────────
     case 'logout':
+        requireController('AuthController.php');
         $controller = new AuthController();
         $controller->logout();
         break;
@@ -72,8 +83,9 @@ switch ($route) {
     // ── Módulo Prestadores (Archivos → Prestadores) ───────────────────────
     case 'prestadores':
     case 'MNU_ARC_PRESTADORES':
+        requireController('PrestadoresController.php');
         $controller = new PrestadoresController();
-        $action     = trim($_GET['action'] ?? '');
+        $action     = isset($_GET['action']) ? trim($_GET['action']) : '';
         switch ($action) {
             // ── AJAX: Grilla principal ────────────────────────────────────
             case 'listado':    $controller->listado();    break; // GET: listado paginado
@@ -109,8 +121,9 @@ switch ($route) {
     // ── Módulo Chat de Telegram ────────────────────────────────────────────
     case 'chat':
     case 'MNU_CHAT_TELEGRAM':
+        requireController('ChatController.php');
         $controller = new ChatController();
-        $action     = trim($_GET['action'] ?? '');
+        $action     = isset($_GET['action']) ? trim($_GET['action']) : '';
         switch ($action) {
             case 'messages':    $controller->getMessages();    break;
             case 'unread':      $controller->getUnreadCount(); break;
@@ -124,8 +137,9 @@ switch ($route) {
     case 'cabecera-mails':
     case 'plantillas-emails':
     case 'MNU_ARC_TAB_CABECERA_MAILS':
+        requireController('PlantillasEmailsController.php');
         $controller = new PlantillasEmailsController();
-        $action     = trim($_GET['action'] ?? '');
+        $action     = isset($_GET['action']) ? trim($_GET['action']) : '';
         switch ($action) {
             case 'listado':  $controller->listado();  break;
             case 'obtener':  $controller->obtener();  break;
@@ -135,9 +149,52 @@ switch ($route) {
         }
         break;
 
+    // ── ABM tablas maestras (Archivos → Tablas Generales) ─────────────────
+    case 'tablas-generales':
+    case 'mnu-arc-tablas':
+    case 'MNU_ARC_TABLAS':
+    case 'localidades':
+    case 'zonas':
+    case 'grupos-web':
+    case 'empresas':
+    case 'bancos':
+    case 'cierre-aumentos-tabla':
+    case 'pct-aumento':
+    case 'tipos-certificados':
+    case 'valores-venta':
+    case 'control-web':
+    case 'url-referencias':
+    case 'tipos-cx':
+    case 'subcategorias':
+    case 'homologacion':
+    case 'grupos-autorizaciones':
+    case 'motivos-debitos':
+    case 'subgrupos-nomenclador':
+    case 'ajustes-impuestos':
+    case 'ajustes-afiliados':
+    case 'textos-rechazo':
+    case 'grupos-cartilla':
+    case 'grupos-nomenclador':
+    case 'titulo-cartilla':
+    case 'diagnosticos':
+    case 'conceptos-internacion':
+    case 'procesos-internacion':
+    case 'reportes-leyendas':
+        requireController('TablaGeneralController.php');
+        $controller = new TablaGeneralController();
+        $action     = isset($_GET['action']) ? trim($_GET['action']) : '';
+        switch ($action) {
+            case 'guardar':  $controller->guardar();  break;
+            case 'eliminar': $controller->eliminar(); break;
+            case 'obtener':  $controller->obtener();  break;
+            default:         $controller->index();    break;
+        }
+        break;
+
     // ── Dashboard (ruta vacía o explícita) ────────────────────────────────
     case '':
     case 'dashboard':
+        requireController('DashboardController.php');
         $controller = new DashboardController();
         $controller->index();
         break;
@@ -181,8 +238,8 @@ switch ($route) {
             ? 'COMEDICA — ' . $moduloLabel
             : 'COMEDICA — Página no encontrada';
         $breadcrumb = $esModuloConocido
-            ? [['label' => $moduloLabel]]
-            : [['label' => 'Error 404']];
+            ? array(array('label' => $moduloLabel))
+            : array(array('label' => 'Error 404'));
 
         require_once __DIR__ . '/views/layouts/header.php';
 
@@ -278,11 +335,12 @@ switch ($route) {
 }
 
 // ── Helper: URL base del proyecto ─────────────────────────────────────────
-function getBaseUrl(): string
+function getBaseUrl()
 {
-    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-    $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
-    $script = dirname($_SERVER['SCRIPT_NAME']);
+    $https  = isset($_SERVER['HTTPS']) ? $_SERVER['HTTPS'] : '';
+    $scheme = (!empty($https) && $https !== 'off') ? 'https' : 'http';
+    $host   = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'localhost';
+    $script = isset($_SERVER['SCRIPT_NAME']) ? dirname($_SERVER['SCRIPT_NAME']) : '';
     $script = rtrim($script, '/');
-    return "{$scheme}://{$host}{$script}/index.php";
+    return $scheme . '://' . $host . $script . '/index.php';
 }

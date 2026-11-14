@@ -5,12 +5,13 @@
  * Grilla DataTables + formulario crear/editar.
  */
 
-$pageTitle  = $pageTitle  ?? 'COMEDICA — Cabecera Mails';
-$breadcrumb = $breadcrumb ?? [
-    ['label' => 'Tablas generales'],
-    ['label' => 'Cabecera Mails'],
-];
-$csrfToken = $csrfToken ?? (string) ($_SESSION['csrf_token'] ?? '');
+$pageTitle  = isset($pageTitle) ? $pageTitle : 'COMEDICA — Cabecera Mails';
+$breadcrumb = isset($breadcrumb) ? $breadcrumb : array(
+    array('label' => 'Tablas generales'),
+    array('label' => 'Cabecera Mails'),
+);
+$csrfSess  = isset($_SESSION['csrf_token']) ? $_SESSION['csrf_token'] : '';
+$csrfToken = isset($csrfToken) ? (string) $csrfToken : (string) $csrfSess;
 
 require_once __DIR__ . '/../../models/Permission.php';
 require_once __DIR__ . '/../../views/layouts/header.php';

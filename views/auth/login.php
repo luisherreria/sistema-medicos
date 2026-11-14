@@ -164,7 +164,7 @@
 
             <!-- CSRF token simple -->
             <input type="hidden" name="csrf_token"
-                   value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '') ?>">
+                   value="<?= htmlspecialchars(isset($_SESSION['csrf_token']) ? $_SESSION['csrf_token'] : '') ?>">
 
             <!-- Usuario -->
             <div class="mb-3">
@@ -178,7 +178,7 @@
                            name="username"
                            class="form-control"
                            placeholder="Ingrese su usuario"
-                           value="<?= htmlspecialchars($_POST['username'] ?? '') ?>"
+                           value="<?= htmlspecialchars(isset($_POST['username']) ? $_POST['username'] : '') ?>"
                            autofocus
                            required>
                 </div>

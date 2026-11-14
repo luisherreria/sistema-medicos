@@ -2,6 +2,7 @@
 /**
  * models/User.php
  * Manejo de autenticación contra la tabla `users`.
+ * Dialecto PHP 5.6.
  *
  * Columnas esperadas: USER_ID, USERNAME, PASSWORD, id_rol, FIRST_NAME, LAST_NAME
  */
@@ -10,7 +11,8 @@ require_once __DIR__ . '/../config/database.php';
 
 class User
 {
-    private PDO $db;
+    /** @var PDO */
+    private $db;
 
     public function __construct()
     {
@@ -24,9 +26,11 @@ class User
      *  1. Hash moderno PHP → password_verify()
      *  2. Hash antiguo MySQL PASSWORD() → comparación directa con SELECT PASSWORD()
      *
-     * @return array|null  Fila del usuario si las credenciales son válidas; null en caso contrario.
+     * @param  string     $username
+     * @param  string     $password
+     * @return array|null Fila del usuario si las credenciales son válidas; null en caso contrario.
      */
-    public function authenticate(string $username, string $password): ?array
+    public function authenticate($username, $password)
     {
         $stmt = $this->db->prepare(
             "SELECT USER_ID, USERNAME, PASSWORD, id_rol, FIRST_NAME, LAST_NAME
@@ -34,7 +38,7 @@ class User
               WHERE USERNAME = :username
               LIMIT 1"
         );
-        $stmt->execute([':username' => $username]);
+        $stmt->execute(array(':username' => $username));
         $user = $stmt->fetch();
 
         if (!$user) {
@@ -55,7 +59,7 @@ class User
         // ── Estrategia 2: MySQL PASSWORD() → hash hexadecimal de 41 chars ─────
         if (strlen($storedHash) === 41 && $storedHash[0] === '*') {
             $stmt2 = $this->db->prepare("SELECT PASSWORD(:pass) AS mysql_hash");
-            $stmt2->execute([':pass' => $password]);
+            $stmt2->execute(array(':pass' => $password));
             $row = $stmt2->fetch();
             if ($row && strtoupper($row['mysql_hash']) === strtoupper($storedHash)) {
                 unset($user['PASSWORD']);
@@ -81,8 +85,11 @@ class User
 
     /**
      * Devuelve un usuario por su USER_ID.
+     *
+     * @param  int        $id
+     * @return array|null
      */
-    public function findById(int $id): ?array
+    public function findById($id)
     {
         $stmt = $this->db->prepare(
             "SELECT USER_ID, USERNAME, id_rol, FIRST_NAME, LAST_NAME
@@ -90,7 +97,8 @@ class User
               WHERE USER_ID = :id
               LIMIT 1"
         );
-        $stmt->execute([':id' => $id]);
-        return $stmt->fetch() ?: null;
+        $stmt->execute(array(':id' => $id));
+        $row = $stmt->fetch();
+        return $row ? $row : null;
     }
 }
