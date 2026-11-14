@@ -11,9 +11,9 @@ $breadcrumb = [['label' => 'Dashboard']];
 require_once __DIR__ . '/../layouts/header.php';
 require_once __DIR__ . '/../../models/Permission.php';
 
-$user     = $_SESSION['user']     ?? [];
-$permisos = $_SESSION['permisos'] ?? [];
-$userId   = (int)($user['id']     ?? 0);
+$user     = isset($_SESSION['user']) ? $_SESSION['user'] : array();
+$permisos = isset($_SESSION['permisos']) ? $_SESSION['permisos'] : array();
+$userId   = isset($user['id']) ? (int) $user['id'] : 0;
 
 // ── Preparar datos de permisos para JS (con íconos y rutas resueltos en PHP) ──
 $permisosParaJS = [];
@@ -41,7 +41,7 @@ $totalCategorias  = count(array_unique(array_column($permisos, 'CLAVE_CATEGORIA'
             <i class="fa-solid fa-gauge-high me-2"></i>Panel Principal
         </h5>
         <p class="text-muted mb-0" style="font-size:0.85rem;">
-            Bienvenido, <strong><?= htmlspecialchars($user['full_name'] ?? 'Usuario') ?></strong>.
+            Bienvenido, <strong><?= htmlspecialchars(isset($user['full_name']) ? $user['full_name'] : 'Usuario') ?></strong>.
             Hoy es <strong id="fecha-dashboard"></strong>.
         </p>
     </div>

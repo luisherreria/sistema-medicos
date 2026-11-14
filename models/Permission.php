@@ -370,6 +370,7 @@ class Permission
             'MNU_ARC_TAB_TXT_REC'     => 'textos-rechazo',
             'MNU_ARC_TAB_DIAG'        => 'diagnosticos',
             'MNU_ARC_TAB_CABECERA_MAILS' => 'cabecera-mails',
+            'MNU_ARC_TABLAS'              => 'tablas-generales',
             // ── CARGA DATOS ───────────────────────────────────────────────
             'MNU_CD_PREST_INGRESO'    => 'carga-prestaciones',
             'MNU_CD_PREST_MOD'        => 'mod-prestaciones',
@@ -513,6 +514,12 @@ class Permission
             'cierre-periodo'                => 'Cierre de Período',
             'cabecera-mails'                => 'Cabecera Mails',
             'plantillas-emails'             => 'Cabecera Mails',
+            'tablas-generales'              => 'Tablas Generales',
+            'localidades'                   => 'Localidades',
+            'zonas'                         => 'Zonas',
+            'bancos'                        => 'Bancos',
+            'empresas'                      => 'Empresas',
+            'diagnosticos'                  => 'Diagnósticos',
         ];
     }
 
@@ -581,8 +588,9 @@ class Permission
                     ['type'=>'item','clave'=>'MNU_ARC_NBU',           'label'=>'NBU',                  'icon'=>'fa-solid fa-file-medical'],
                     ['type'=>'item','clave'=>'MNU_ARC_KAIROS',        'label'=>'Kairos',               'icon'=>'fa-solid fa-clock-rotate-left'],
                     [
-                        'type'=>'group','label'=>'Tablas','icon'=>'fa-solid fa-table-cells',
+                        'type'=>'group','label'=>'Tablas Generales','icon'=>'fa-solid fa-table-list',
                         'children' => [
+                            ['type'=>'item','clave'=>'MNU_ARC_TAB_CABECERA_MAILS','label'=>'Cabecera Mails','route'=>'cabecera-mails','icon'=>'fa-solid fa-envelope-open-text'],
                             ['type'=>'item','clave'=>'MNU_ARC_TAB_LOCALIDADES', 'label'=>'Localidades'],
                             ['type'=>'item','clave'=>'MNU_ARC_TAB_ZONAS',       'label'=>'Zonas'],
                             ['type'=>'item','clave'=>'MNU_ARC_TAB_GRUPO_WEB',   'label'=>'Grupo Web'],
@@ -611,23 +619,6 @@ class Permission
                             ['type'=>'item','clave'=>'MNU_ARC_TAB_TXT_REC',     'label'=>'Textos de Rechazo'],
                             ['type'=>'item','clave'=>'MNU_ARC_TAB_DIAG',        'label'=>'Diagnósticos'],
                         ]
-                    ],
-                ]
-            ],
-
-            // ═══════════════════════════════════════════════
-            //  1b. TABLAS GENERALES
-            // ═══════════════════════════════════════════════
-            [
-                'type' => 'category', 'cat' => 'TABLAS_GENERALES',
-                'label' => 'Tablas generales', 'icon' => 'fa-solid fa-table-list',
-                'children' => [
-                    [
-                        'type'  => 'item',
-                        'clave' => 'MNU_ARC_TAB_CABECERA_MAILS',
-                        'label' => 'Cabecera Mails',
-                        'route' => 'cabecera-mails',
-                        'icon'  => 'fa-solid fa-envelope-open-text',
                     ],
                 ]
             ],

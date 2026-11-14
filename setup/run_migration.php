@@ -7,7 +7,10 @@
  */
 
 // Seguridad básica: solo desde localhost
-$host = $_SERVER['REMOTE_ADDR'] ?? $_SERVER['SERVER_ADDR'] ?? '';
+$host = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '';
+if ($host === '' && isset($_SERVER['SERVER_ADDR'])) {
+    $host = $_SERVER['SERVER_ADDR'];
+}
 if (!in_array($host, ['127.0.0.1', '::1', 'localhost'])) {
     http_response_code(403);
     die('Acceso denegado.');
@@ -84,7 +87,10 @@ foreach (['ebamp', 'obramed', 'obrasoc', 'novedade'] as $t) {
 
 <h6>Log detallado:</h6>
 <div style="font-family:monospace; font-size:0.78rem; max-height:400px; overflow-y:auto; background:#f8f9fa; border:1px solid #dee2e6; padding:12px; border-radius:6px;">
-<?php foreach ($log as [$status, $msg]): ?>
+<?php foreach ($log as $row):
+    $status = $row[0];
+    $msg    = $row[1];
+?>
 <div style="color:<?= $status === 'ok' ? '#198754' : '#dc3545' ?>;">
     [<?= strtoupper($status) ?>] <?= htmlspecialchars($msg) ?>
 </div>
