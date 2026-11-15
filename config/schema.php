@@ -116,9 +116,22 @@ if (!function_exists('dbAppTablesLen')) {
     }
 }
 
+if (!function_exists('dbSqlQualifyMatch')) {
+    /**
+     * @param  string[] $m
+     * @return string
+     */
+    function dbSqlQualifyMatch($m)
+    {
+        return $m[1] . dbTable($m[3]);
+    }
+}
+
 if (!function_exists('dbSql')) {
     /**
      * Reescribe SQL para usar solo vfpcomedica.tabla.
+     * Solo califica nombres en FROM/JOIN/INTO/UPDATE/TABLE.
+     * No toca columnas ni placeholders (:obrasoc, :users).
      *
      * @param  string $sql
      * @return string
@@ -129,16 +142,22 @@ if (!function_exists('dbSql')) {
         $db  = DB_APP;
         $sql = preg_replace('/\b(?:cartilla|vfpmedicos)\s*\.\s*/i', $db . '.', $sql);
         $tables = dbAppTables();
+        $alts = array();
         $i = 0;
         $n = count($tables);
         for ($i = 0; $i < $n; $i++) {
-            $t = $tables[$i];
-            $ident = dbTable($t);
-            $sql = preg_replace(
-                '/(?<![A-Za-z0-9_`\\.])`?' . preg_quote($t, '/') . '`?(?![A-Za-z0-9_`])/i',
-                $ident,
-                $sql
-            );
+            $alts[] = preg_quote($tables[$i], '/');
+        }
+        if (empty($alts)) {
+            return $sql;
+        }
+        $names = implode('|', $alts);
+        $re = '/\b((?:FROM|JOIN|INTO|UPDATE|TABLE)\s+)'
+            . '(?!`?' . preg_quote($db, '/') . '`?\s*\.)'
+            . '(`?)(' . $names . ')(`?)(?![A-Za-z0-9_])/i';
+        $rewritten = preg_replace_callback($re, 'dbSqlQualifyMatch', $sql);
+        if (is_string($rewritten)) {
+            return $rewritten;
         }
         return $sql;
     }

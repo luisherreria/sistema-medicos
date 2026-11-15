@@ -27,6 +27,8 @@
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
 <!-- Grid Helper reutilizable -->
 <script src="/sistema-medicos/public/js/grid-helper.js"></script>
+<!-- Periodo YY/MM: la barra se inserta sola -->
+<script src="/sistema-medicos/public/js/periodo-yymm.js"></script>
 
 <style>
     /* ── Reloj flotante ─────────────────────────────────────────────────── */

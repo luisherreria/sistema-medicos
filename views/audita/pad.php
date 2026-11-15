@@ -74,12 +74,22 @@ require_once __DIR__ . '/../../views/layouts/header.php';
                 $dis   = !empty($f['disabled']);
                 $up    = !empty($f['upper']);
                 $fid   = isset($f['id']) ? $f['id'] : ('pad-' . $fname);
+                $esPer = ($fname === 'periodo' || $fname === 'tperi' || $fname === 'tperih');
+                if ($esPer && (strtoupper(trim((string) $fval)) === 'AA/MM' || strtoupper(trim((string) $fval)) === 'YY/MM')) {
+                    $fval = '';
+                }
                 echo '<div class="row g-2 mb-2 align-items-center">';
                 echo '<div class="col-sm-4"><label class="small mb-0" for="' . audita_h($fid) . '">' . audita_h($flab) . '</label></div>';
                 echo '<div class="col-sm-8">';
-                echo '<input class="form-control form-control-sm' . ($up ? ' text-uppercase' : '') . '"';
+                echo '<input class="form-control form-control-sm' . ($up ? ' text-uppercase' : '') . ($esPer ? ' periodo-yymm' : '') . '"';
                 echo ' name="' . audita_h($fname) . '" id="' . audita_h($fid) . '"';
                 echo ' value="' . audita_h($fval) . '"';
+                if ($esPer) {
+                    echo ' placeholder="YY/MM" inputmode="numeric" autocomplete="off"';
+                    if ($fmax < 5) {
+                        $fmax = 5;
+                    }
+                }
                 if ($fmax > 0) {
                     echo ' maxlength="' . $fmax . '"';
                 }

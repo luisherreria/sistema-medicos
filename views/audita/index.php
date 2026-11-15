@@ -105,7 +105,9 @@ require_once __DIR__ . '/../../views/layouts/header.php';
             </div>
             <div class="col-md-2">
                 <label class="form-label mb-0 small">periodo</label>
-                <input type="text" name="periodo" class="form-control form-control-sm" value="<?= audita_h($periodo) ?>">
+                <input type="text" name="periodo" class="form-control form-control-sm periodo-yymm"
+                       maxlength="5" inputmode="numeric" autocomplete="off" placeholder="YY/MM"
+                       value="<?= audita_h($periodo) ?>">
             </div>
             <div class="col-md-2">
                 <label class="form-label mb-0 small">TITULO</label>

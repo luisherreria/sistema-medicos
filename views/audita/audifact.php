@@ -12,7 +12,10 @@ if (!function_exists('audita_h')) {
 
 $init      = isset($init) ? $init : array();
 $csrfToken = isset($csrfToken) ? (string) $csrfToken : '';
-$periodo   = isset($init['periodo']) && $init['periodo'] !== '' ? $init['periodo'] : 'AA/MM';
+$periodo   = isset($init['periodo']) && $init['periodo'] !== '' ? $init['periodo'] : '';
+if (strtoupper(trim((string) $periodo)) === 'AA/MM') {
+    $periodo = '';
+}
 $tpresta   = isset($init['prestador']) ? $init['prestador'] : '';
 $nombre    = isset($init['nombre']) ? $init['nombre'] : '';
 $pageTitle = isset($pageTitle) ? $pageTitle : 'COMEDICA — Auditoria de Facturación';
@@ -52,8 +55,9 @@ require_once __DIR__ . '/../../views/layouts/header.php';
             <div class="row g-2 mb-2 align-items-center">
                 <div class="col-sm-4"><label class="small mb-0" for="af-periodo">Periodo :</label></div>
                 <div class="col-sm-4">
-                    <input class="form-control form-control-sm" id="af-periodo" name="periodo"
-                           maxlength="5" placeholder="AA/MM" value="<?= audita_h($periodo) ?>">
+                    <input class="form-control form-control-sm periodo-yymm" id="af-periodo" name="periodo"
+                           maxlength="5" inputmode="numeric" autocomplete="off" placeholder="YY/MM"
+                           value="<?= audita_h($periodo) ?>">
                 </div>
             </div>
             <div class="row g-2 mb-2 align-items-center">
