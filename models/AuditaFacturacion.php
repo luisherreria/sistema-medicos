@@ -17,9 +17,184 @@ class AuditaFacturacion
     /** @var PDO */
     private $db;
 
+    /** @var string|null nombre real en MySQL */
+    private $tablaReal = null;
+
+    /** @var string */
+    private $tablaError = '';
+
     public function __construct()
     {
         $this->db = getDBConnection();
+    }
+
+    /**
+     * @return string
+     */
+    public function ultimoError()
+    {
+        return $this->tablaError;
+    }
+
+    /**
+     * audifac2 es el alias VFP (USE c:\bases\AUDIFAC2). En MySQL el nombre puede
+     * ser audifact / audif2 / detalle si el importador usó el DBF original.
+     *
+     * @return string
+     */
+    public function tablaNombre()
+    {
+        if ($this->tablaReal !== null) {
+            return $this->tablaReal;
+        }
+        $this->tablaReal = '';
+        $this->tablaError = '';
+        $map = array();
+        try {
+            $stmt = $this->db->query('SHOW TABLES');
+        } catch (PDOException $e) {
+            $this->tablaError = $e->getMessage();
+            return '';
+        }
+        if ($stmt) {
+            while ($row = $stmt->fetch(PDO::FETCH_NUM)) {
+                if (!isset($row[0]) || (string) $row[0] === '') {
+                    continue;
+                }
+                $map[strtolower((string) $row[0])] = (string) $row[0];
+            }
+        }
+        if (empty($map)) {
+            $this->tablaError = 'SHOW TABLES no devolvió tablas en vfpmedicos.';
+            return '';
+        }
+
+        $candidatos = array('audifac2', 'audifact', 'audifac', 'audif2', 'detalle');
+        foreach ($map as $low => $actual) {
+            if (strpos($low, 'audifac') !== false || $low === 'audif2') {
+                $candidatos[] = $low;
+            }
+        }
+
+        $mejor = '';
+        $mejorHits = 0;
+        $vistos = array();
+        $revisadas = array();
+        $i = 0;
+        $n = count($candidatos);
+        for ($i = 0; $i < $n; $i++) {
+            $c = $candidatos[$i];
+            if (!isset($map[$c]) || isset($vistos[$c])) {
+                continue;
+            }
+            $vistos[$c] = true;
+            $actual = $map[$c];
+            $cols = $this->columnasDeTabla($actual);
+            $hits = $this->cuentaCamposAudita($cols);
+            $revisadas[] = $actual . ' (' . $hits . ' campos de AUDITA)';
+            if ($hits >= 5) {
+                $this->tablaReal = $actual;
+                $this->tablaError = '';
+                return $this->tablaReal;
+            }
+            if ($hits > $mejorHits) {
+                $mejorHits = $hits;
+                $mejor = $actual;
+            }
+        }
+
+        if ($mejor !== '' && $mejorHits > 0) {
+            $this->tablaReal = $mejor;
+            $this->tablaError = '';
+            return $this->tablaReal;
+        }
+
+        $parecidas = array();
+        foreach ($map as $low => $actual) {
+            if (strpos($low, 'audi') !== false || strpos($low, 'fact') !== false
+                || strpos($low, 'detal') !== false || $low === 'consulta'
+            ) {
+                $parecidas[] = $actual;
+            }
+        }
+        $this->tablaError = 'No está la tabla audifac2 en vfpmedicos (VFP: c:\\bases\\AUDIFAC2).';
+        if (!empty($revisadas)) {
+            $this->tablaError .= ' Revisadas: ' . implode(', ', $revisadas) . '.';
+        }
+        if (!empty($parecidas)) {
+            $this->tablaError .= ' Parecidas: ' . implode(', ', $parecidas) . '.';
+        } else {
+            $this->tablaError .= ' Importe el DBF AUDIFAC2 (no se crea el esquema acá).';
+        }
+        return '';
+    }
+
+    /**
+     * @param  string $nombre
+     * @return string[]
+     */
+    private function columnasDeTabla($nombre)
+    {
+        $safe = str_replace(array('`', '.', ' ', ';'), '', (string) $nombre);
+        if ($safe === '') {
+            return array();
+        }
+        try {
+            $stmt = $this->db->query('SHOW COLUMNS FROM `' . $safe . '`');
+        } catch (PDOException $e) {
+            $this->tablaError = $e->getMessage();
+            return array();
+        }
+        $out = array();
+        if ($stmt) {
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $field = '';
+                if (isset($row['Field'])) {
+                    $field = $row['Field'];
+                } elseif (isset($row['field'])) {
+                    $field = $row['field'];
+                }
+                if ($field !== '') {
+                    $out[] = strtolower((string) $field);
+                }
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * @param  string[] $cols
+     * @return int
+     */
+    private function cuentaCamposAudita($cols)
+    {
+        $set = array();
+        $i = 0;
+        $n = count($cols);
+        for ($i = 0; $i < $n; $i++) {
+            $set[strtolower($cols[$i])] = true;
+        }
+        $citados = self::camposCitados();
+        $hits = 0;
+        $nCit = count($citados);
+        for ($i = 0; $i < $nCit; $i++) {
+            if (isset($set[strtolower($citados[$i])])) {
+                $hits++;
+            }
+        }
+        return $hits;
+    }
+
+    /**
+     * @return string
+     */
+    private function tablaSql()
+    {
+        $t = $this->tablaNombre();
+        if ($t === '') {
+            $t = self::TABLA;
+        }
+        return '`' . str_replace(array('`', '.'), '', $t) . '`';
     }
 
     /**
@@ -91,9 +266,14 @@ class AuditaFacturacion
      */
     public function columnasReales()
     {
+        $t = $this->tablaNombre();
+        if ($t === '') {
+            return array();
+        }
         try {
-            $stmt = $this->db->query('SHOW COLUMNS FROM `' . self::TABLA . '`');
+            $stmt = $this->db->query('SHOW COLUMNS FROM ' . $this->tablaSql());
         } catch (PDOException $e) {
+            $this->tablaError = $e->getMessage();
             return array();
         }
         $out = array();
@@ -140,6 +320,8 @@ class AuditaFacturacion
                 'totales'   => $this->totalesVacios(),
                 'tabla_ok'  => false,
                 'columnas'  => array(),
+                'tabla'     => $this->tablaNombre(),
+                'error'     => $this->ultimoError(),
             );
         }
 
@@ -175,7 +357,7 @@ class AuditaFacturacion
             $orderSql = ' ORDER BY `nroorden` ASC';
         }
 
-        $sql  = 'SELECT `' . implode('`,`', $selectCols) . '` FROM `' . self::TABLA . '`' . $where . $orderSql
+        $sql  = 'SELECT `' . implode('`,`', $selectCols) . '` FROM ' . $this->tablaSql() . '' . $where . $orderSql
             . ' LIMIT 4001';
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
@@ -205,7 +387,12 @@ class AuditaFacturacion
     {
         $reales = $this->columnasReales();
         if (empty($reales)) {
-            return array('filas' => array(), 'tabla_ok' => false);
+            return array(
+                'filas'     => array(),
+                'tabla_ok'  => false,
+                'tabla'     => $this->tablaNombre(),
+                'error'     => $this->ultimoError(),
+            );
         }
         $grupo = array('coprestado', 'coobrasoc', 'cosucfac', 'conrofac', 'coperiodo');
         $gCols = array();
@@ -217,7 +404,16 @@ class AuditaFacturacion
             }
         }
         if (empty($gCols)) {
-            return array('filas' => array(), 'tabla_ok' => true);
+            if ($this->tablaError === '') {
+                $this->tablaError = 'La tabla ' . $this->tablaNombre()
+                    . ' no tiene coprestado/coobrasoc/conrofac (columnas Init de AUDITA).';
+            }
+            return array(
+                'filas'     => array(),
+                'tabla_ok'  => false,
+                'tabla'     => $this->tablaNombre(),
+                'error'     => $this->ultimoError(),
+            );
         }
         $select = array();
         $i = 0;
@@ -233,11 +429,26 @@ class AuditaFacturacion
         if ($orderCol === null) {
             $orderCol = $gCols[0];
         }
-        $sql = 'SELECT ' . implode(',', $select) . ' FROM `' . self::TABLA . '` GROUP BY `'
+        $sql = 'SELECT ' . implode(',', $select) . ' FROM ' . $this->tablaSql() . ' GROUP BY `'
             . implode('`,`', $gCols) . '` ORDER BY `' . $orderCol . '` DESC LIMIT 500';
-        $stmt = $this->db->query($sql);
+        try {
+            $stmt = $this->db->query($sql);
+        } catch (PDOException $e) {
+            $this->tablaError = $e->getMessage();
+            return array(
+                'filas'     => array(),
+                'tabla_ok'  => false,
+                'tabla'     => $this->tablaNombre(),
+                'error'     => $this->ultimoError(),
+            );
+        }
         $filas = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : array();
-        return array('filas' => $filas, 'tabla_ok' => true);
+        return array(
+            'filas'     => $filas,
+            'tabla_ok'  => true,
+            'tabla'     => $this->tablaNombre(),
+            'error'     => '',
+        );
     }
 
     /**
@@ -276,7 +487,7 @@ class AuditaFacturacion
                 $where .= ' AND TRIM(IFNULL(`codebito`,\'\')) <> \'\'';
             }
         }
-        $sql = 'UPDATE `' . self::TABLA . '` SET `sedacion` = :sed ' . $where;
+        $sql = 'UPDATE ' . $this->tablaSql() . ' SET `sedacion` = :sed ' . $where;
         $stmt = $this->db->prepare($sql);
         $params[':sed'] = $val;
         $stmt->execute($params);
@@ -308,7 +519,7 @@ class AuditaFacturacion
             }
             $params[':clasifa'] = '%A%';
         }
-        $sql = 'UPDATE `' . self::TABLA . '` SET `sedacion` = :sed ' . $where;
+        $sql = 'UPDATE ' . $this->tablaSql() . ' SET `sedacion` = :sed ' . $where;
         $stmt = $this->db->prepare($sql);
         $params[':sed'] = $val;
         $stmt->execute($params);
@@ -329,7 +540,7 @@ class AuditaFacturacion
         ) {
             return false;
         }
-        $sql = 'UPDATE `' . self::TABLA . '`
+        $sql = 'UPDATE ' . $this->tablaSql() . '
                    SET `coselecc` = CASE WHEN `coselecc` THEN 0 ELSE 1 END
                  WHERE `nroorden` = :nro
                  LIMIT 1';
@@ -480,7 +691,7 @@ class AuditaFacturacion
             return 0;
         }
         if ($this->colReal('nroorden', $reales) !== null && (!isset($campos['nroorden']) || $campos['nroorden'] === '')) {
-            $stmt = $this->db->query('SELECT COALESCE(MAX(`nroorden`),0) + 1 FROM `' . self::TABLA . '`');
+            $stmt = $this->db->query('SELECT COALESCE(MAX(`nroorden`),0) + 1 FROM ' . $this->tablaSql() . '');
             $campos['nroorden'] = (int) $stmt->fetchColumn();
         }
         $cols   = array();
@@ -498,7 +709,7 @@ class AuditaFacturacion
         if (empty($cols)) {
             return 0;
         }
-        $sql = 'INSERT INTO `' . self::TABLA . '` (' . implode(',', $cols) . ') VALUES (' . implode(',', $ph) . ')';
+        $sql = 'INSERT INTO ' . $this->tablaSql() . ' (' . implode(',', $cols) . ') VALUES (' . implode(',', $ph) . ')';
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         if (isset($campos['nroorden'])) {
@@ -538,11 +749,11 @@ class AuditaFacturacion
             return 0;
         }
         if ($todas && $this->colReal('cocodprest', $reales) !== null && $prestant !== '') {
-            $sql = 'UPDATE `' . self::TABLA . '` SET ' . implode(',', $set)
+            $sql = 'UPDATE ' . $this->tablaSql() . ' SET ' . implode(',', $set)
                 . ' WHERE TRIM(`cocodprest`) = :prestant';
             $params[':prestant'] = $prestant;
         } elseif ($this->colReal('nroorden', $reales) !== null) {
-            $sql = 'UPDATE `' . self::TABLA . '` SET ' . implode(',', $set)
+            $sql = 'UPDATE ' . $this->tablaSql() . ' SET ' . implode(',', $set)
                 . ' WHERE `nroorden` = :nro LIMIT 1';
             $params[':nro'] = (int) $nroorden;
         } else {
@@ -556,7 +767,7 @@ class AuditaFacturacion
             && isset($campos['cocantpres'])
         ) {
             $st2 = $this->db->prepare(
-                'UPDATE `' . self::TABLA . '` SET `cocantpres` = :cant WHERE TRIM(`cocodprest`) = :prestant'
+                'UPDATE ' . $this->tablaSql() . ' SET `cocantpres` = :cant WHERE TRIM(`cocodprest`) = :prestant'
             );
             $st2->execute(array(
                 ':cant'     => $campos['cocantpres'],
@@ -594,7 +805,7 @@ class AuditaFacturacion
         if (empty($set)) {
             return 0;
         }
-        $sql = 'UPDATE `' . self::TABLA . '` SET ' . implode(',', $set) . ' WHERE `conumero` = :c';
+        $sql = 'UPDATE ' . $this->tablaSql() . ' SET ' . implode(',', $set) . ' WHERE `conumero` = :c';
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         return $stmt->rowCount();
@@ -638,7 +849,7 @@ class AuditaFacturacion
         if (empty($set)) {
             return 0;
         }
-        $sql = 'UPDATE `' . self::TABLA . '` SET ' . implode(',', $set)
+        $sql = 'UPDATE ' . $this->tablaSql() . ' SET ' . implode(',', $set)
             . ' WHERE `nroorden` = :nro LIMIT 1';
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);

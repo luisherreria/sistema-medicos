@@ -371,7 +371,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
             if (!res.tabla_ok) {
-                showAlert('Tabla audifac2 no existe en vfpmedicos (SHOW COLUMNS vacío).', false);
+                var nomTabla = (res.tabla && String(res.tabla) !== '') ? res.tabla : 'audifac2';
+                var det = (res.error && String(res.error) !== '') ? (': ' + res.error) : ' (SHOW COLUMNS vacío).';
+                showAlert('No se pudo leer ' + nomTabla + det, false);
                 pintarFilas([]);
                 pintarTotales(res.totales);
                 return;

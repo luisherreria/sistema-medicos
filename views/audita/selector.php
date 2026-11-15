@@ -13,6 +13,7 @@ if (!function_exists('audita_h')) {
 $facturas   = isset($facturas) ? $facturas : array();
 $tablaOk    = isset($tablaOk) ? (bool) $tablaOk : true;
 $errorTabla = isset($errorTabla) ? $errorTabla : '';
+$tablaUsada = isset($tablaUsada) && (string) $tablaUsada !== '' ? (string) $tablaUsada : 'audifac2';
 $pageTitle  = isset($pageTitle) ? $pageTitle : 'COMEDICA — Auditar Facturación';
 $breadcrumb = isset($breadcrumb) ? $breadcrumb : array(
     array('label' => 'Audit. Facturac.'),
@@ -29,7 +30,7 @@ require_once __DIR__ . '/../../views/layouts/header.php';
             <i class="fa-solid fa-magnifying-glass-dollar me-2"></i>Auditar Facturación
         </h5>
         <p class="text-muted mb-0" style="font-size:0.82rem;">
-            Elija una factura de <code>audifac2</code> para abrir AUDITA
+            Elija una factura de <code><?= audita_h($tablaUsada) ?></code> para abrir AUDITA
         </p>
     </div>
     <a href="index.php?route=audit-facturacion&amp;grid=1" class="btn btn-sm btn-outline-secondary">
@@ -39,11 +40,11 @@ require_once __DIR__ . '/../../views/layouts/header.php';
 
 <?php if (!$tablaOk) { ?>
     <div class="alert alert-danger">
-        No se pudo leer <code>audifac2</code><?= $errorTabla !== '' ? ': ' . audita_h($errorTabla) : '.' ?>
+        No se pudo leer <code><?= audita_h($tablaUsada !== '' ? $tablaUsada : 'audifac2') ?></code><?= $errorTabla !== '' ? ': ' . audita_h($errorTabla) : '.' ?>
     </div>
 <?php } elseif (empty($facturas)) { ?>
     <div class="alert alert-info">
-        No hay facturas en <code>audifac2</code>. Cargue una liquidación a auditar o abra la grilla sin filtro.
+        No hay facturas en <code><?= audita_h($tablaUsada) ?></code>. Cargue una liquidación a auditar o abra la grilla sin filtro.
     </div>
 <?php } else { ?>
 <div class="card border-0 shadow-sm" style="border-radius:10px;">

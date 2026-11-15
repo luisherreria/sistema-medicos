@@ -38,15 +38,24 @@ class AuditaFacturacionController
         if (!$hayFiltro && !$forzarGrid) {
             $tablaOk = true;
             $errorTabla = '';
+            $tablaUsada = '';
             $facturas = array();
+            $model = new AuditaFacturacion();
             try {
-                $sel = (new AuditaFacturacion())->listarFacturas();
+                $sel = $model->listarFacturas();
                 $facturas = $sel['filas'];
                 $tablaOk = !empty($sel['tabla_ok']);
+                if (isset($sel['error']) && (string) $sel['error'] !== '') {
+                    $errorTabla = (string) $sel['error'];
+                }
             } catch (PDOException $e) {
                 $tablaOk = false;
                 $errorTabla = $e->getMessage();
             }
+            if ($errorTabla === '') {
+                $errorTabla = $model->ultimoError();
+            }
+            $tablaUsada = $model->tablaNombre();
             require_once __DIR__ . '/../views/audita/selector.php';
             return;
         }
@@ -63,12 +72,18 @@ class AuditaFacturacionController
         $model = new AuditaFacturacion();
         try {
             $out = $model->listar($this->initParams());
+            $err = '';
+            if (empty($out['tabla_ok'])) {
+                $err = isset($out['error']) ? (string) $out['error'] : $model->ultimoError();
+            }
             echo json_encode(array(
                 'ok'        => true,
                 'filas'     => $out['filas'],
                 'totales'   => $out['totales'],
                 'tabla_ok'  => $out['tabla_ok'],
                 'truncado'  => !empty($out['truncado']),
+                'tabla'     => $model->tablaNombre(),
+                'error'     => $err,
             ), JSON_UNESCAPED_UNICODE);
         } catch (PDOException $e) {
             $this->jsonError('Error al leer audifac2: ' . $e->getMessage());
