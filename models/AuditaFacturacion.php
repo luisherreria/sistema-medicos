@@ -145,18 +145,23 @@ class AuditaFacturacion
             $this->tablaError = $e->getMessage();
             return array();
         }
+        if (!$stmt) {
+            $info = $this->db->errorInfo();
+            if (isset($info[2]) && (string) $info[2] !== '') {
+                $this->tablaError = (string) $info[2];
+            }
+            return array();
+        }
         $out = array();
-        if ($stmt) {
-            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                $field = '';
-                if (isset($row['Field'])) {
-                    $field = $row['Field'];
-                } elseif (isset($row['field'])) {
-                    $field = $row['field'];
-                }
-                if ($field !== '') {
-                    $out[] = strtolower((string) $field);
-                }
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $field = '';
+            if (isset($row['Field'])) {
+                $field = $row['Field'];
+            } elseif (isset($row['field'])) {
+                $field = $row['field'];
+            }
+            if ($field !== '') {
+                $out[] = strtolower((string) $field);
             }
         }
         return $out;
@@ -902,16 +907,15 @@ class AuditaFacturacion
         }
         $ebamp = $this->tablaFisica('ebamp');
         if ($ebamp === '') {
-            $out['error'] = 'No está la tabla ebamp.';
+            $det = $this->ultimoError();
+            $out['error'] = 'No está la tabla ebamp.' . ($det !== '' ? ' ' . $det : '');
             return $out;
         }
         $cols = $this->columnasDeTabla($ebamp);
         $cMat = $this->colEn($cols, 'matricula');
-        if ($cMat === null) {
-            $cMat = $this->colEn($cols, 'codigo');
-        }
-        if ($cMat === null) {
-            $out['error'] = 'ebamp no tiene matricula.';
+        $cCod = $this->colEn($cols, 'codigo');
+        if ($cMat === null && $cCod === null) {
+            $out['error'] = 'ebamp no tiene matricula/codigo.';
             return $out;
         }
         $cNom  = $this->colEn($cols, 'nombre');
@@ -919,7 +923,13 @@ class AuditaFacturacion
         $cVal  = $this->colEn($cols, 'valereci');
         $cInfo = $this->colEn($cols, 'infoliq');
         $cCat  = $this->colEn($cols, 'categ');
-        $select = array('`' . $cMat . '` AS `matricula`');
+        $select = array();
+        if ($cMat !== null) {
+            $select[] = '`' . $cMat . '` AS `matricula`';
+        }
+        if ($cCod !== null) {
+            $select[] = '`' . $cCod . '` AS `codigo`';
+        }
         if ($cNom !== null) {
             $select[] = '`' . $cNom . '` AS `nombre`';
         }
@@ -932,14 +942,29 @@ class AuditaFacturacion
         if ($cInfo !== null) {
             $select[] = '`' . $cInfo . '` AS `infoliq`';
         }
-        $sql = 'SELECT ' . implode(',', $select) . ' FROM `' . $ebamp . '` WHERE TRIM(`' . $cMat . '`) = :p';
+        $wheres = array();
+        $params = array();
+        if ($cMat !== null) {
+            $wheres[] = 'TRIM(`' . $cMat . '`) = :p';
+            $params[':p'] = $tpresta;
+        }
+        if ($cCod !== null) {
+            $wheres[] = 'TRIM(`' . $cCod . '`) = :pcod';
+            $params[':pcod'] = $tpresta;
+        }
+        $sql = 'SELECT ' . implode(',', $select) . ' FROM `' . $ebamp . '` WHERE (' . implode(' OR ', $wheres) . ')';
         if ($cCat !== null) {
             $sql .= ' AND TRIM(IFNULL(`' . $cCat . '`,\'\')) <> \'MECM\'';
         }
         $sql .= ' LIMIT 5';
         try {
             $stmt = $this->db->prepare($sql);
-            $stmt->execute(array(':p' => $tpresta));
+            if (!$stmt) {
+                $info = $this->db->errorInfo();
+                $out['error'] = isset($info[2]) ? (string) $info[2] : 'Error al leer ebamp.';
+                return $out;
+            }
+            $stmt->execute($params);
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (PDOException $e) {
             $this->tablaError = $e->getMessage();
@@ -952,7 +977,13 @@ class AuditaFacturacion
         }
         $row = $rows[0];
         $out['ok'] = true;
-        $out['tpresta'] = isset($row['matricula']) ? trim((string) $row['matricula']) : $tpresta;
+        if (isset($row['matricula']) && trim((string) $row['matricula']) !== '') {
+            $out['tpresta'] = trim((string) $row['matricula']);
+        } elseif (isset($row['codigo']) && trim((string) $row['codigo']) !== '') {
+            $out['tpresta'] = trim((string) $row['codigo']);
+        } else {
+            $out['tpresta'] = $tpresta;
+        }
         $out['nombre'] = isset($row['nombre']) ? (string) $row['nombre'] : '';
         $out['confact'] = $this->esFlag(isset($row['confact']) ? $row['confact'] : '');
         $out['valereci'] = $this->esFlag(isset($row['valereci']) ? $row['valereci'] : '');
@@ -1061,24 +1092,31 @@ class AuditaFacturacion
      */
     private function tablaFisica($nombre)
     {
-        $needle = strtolower(trim((string) $nombre));
-        if ($needle === '') {
+        $safe = str_replace(array('`', '.', ' ', ';'), '', (string) $nombre);
+        if ($safe === '') {
             return '';
         }
         try {
-            $stmt = $this->db->query('SHOW TABLES');
+            $probe = $this->db->query('SELECT 1 FROM `' . $safe . '` LIMIT 1');
+            if ($probe) {
+                return $safe;
+            }
+        } catch (PDOException $e) {
+            $this->tablaError = $e->getMessage();
+        }
+        $cols = $this->columnasDeTabla($safe);
+        if (!empty($cols)) {
+            return $safe;
+        }
+        try {
+            $stmt = $this->db->query("SHOW TABLES LIKE " . $this->db->quote($safe));
         } catch (PDOException $e) {
             $this->tablaError = $e->getMessage();
             return '';
         }
-        if (!$stmt) {
-            return '';
-        }
-        while ($row = $stmt->fetch(PDO::FETCH_NUM)) {
-            if (!isset($row[0])) {
-                continue;
-            }
-            if (strtolower((string) $row[0]) === $needle) {
+        if ($stmt) {
+            $row = $stmt->fetch(PDO::FETCH_NUM);
+            if ($row && isset($row[0]) && trim((string) $row[0]) !== '') {
                 return (string) $row[0];
             }
         }

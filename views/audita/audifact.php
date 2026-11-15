@@ -180,15 +180,6 @@ document.addEventListener('DOMContentLoaded', function () {
             $('#af-periodo').focus();
             return false;
         }
-        if ($.trim($('#af-nomprest').val()) === '') {
-            e.preventDefault();
-            buscarPrestador(function (ok) {
-                if (ok) {
-                    $('#form-audifact')[0].submit();
-                }
-            });
-            return false;
-        }
         return true;
     });
 
