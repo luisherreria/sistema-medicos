@@ -29,15 +29,15 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../config/schema.php';
 
 class Prestador
 {
-    private PDO $db;
+    private $db;
 
     public function __construct()
     {
-        $this->db = getDBConnection();
+        $this->db = appDb();
     }
 
     // ══════════════════════════════════════════════════════════════════════════

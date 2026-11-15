@@ -7,7 +7,7 @@
  * Columnas esperadas: USER_ID, USERNAME, PASSWORD, id_rol, FIRST_NAME, LAST_NAME
  */
 
-require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../config/schema.php';
 
 class User
 {
@@ -16,7 +16,7 @@ class User
 
     public function __construct()
     {
-        $this->db = getDBConnection();
+        $this->db = appDb();
     }
 
     /**

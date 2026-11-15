@@ -16,10 +16,10 @@ if (!in_array($host, array('127.0.0.1', '::1', 'localhost'), true)) {
     die('Acceso denegado.');
 }
 
-require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../config/schema.php';
 require_once __DIR__ . '/dbf_skip.php';
 
-$db = getDBConnection();
+$db = appDb();
 $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
 $log = array();
@@ -28,11 +28,11 @@ function tg_has_column(PDO $db, $table, $column)
 {
     $stmt = $db->prepare(
         "SELECT COUNT(*) FROM information_schema.COLUMNS
-          WHERE TABLE_SCHEMA = DATABASE()
+          WHERE TABLE_SCHEMA = :s
             AND TABLE_NAME = :t
             AND COLUMN_NAME = :c"
     );
-    $stmt->execute(array(':t' => $table, ':c' => $column));
+    $stmt->execute(array(':s' => DB_APP, ':t' => $table, ':c' => $column));
     return (int) $stmt->fetchColumn() > 0;
 }
 
@@ -40,10 +40,10 @@ function tg_table_exists(PDO $db, $table)
 {
     $stmt = $db->prepare(
         "SELECT COUNT(*) FROM information_schema.TABLES
-          WHERE TABLE_SCHEMA = DATABASE()
+          WHERE TABLE_SCHEMA = :s
             AND TABLE_NAME = :t"
     );
-    $stmt->execute(array(':t' => $table));
+    $stmt->execute(array(':s' => DB_APP, ':t' => $table));
     return (int) $stmt->fetchColumn() > 0;
 }
 

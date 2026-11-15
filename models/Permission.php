@@ -3,12 +3,12 @@
  * models/Permission.php
  * Consulta de permisos asignados a un usuario.
  *
- * Esquema real de vfpmedicos:
+ * Esquema vfpcomedica:
  *   users_permissions : ID, USER_ID, PERMISSION_ID (→ permisos.CLAVE), ADDED, REMOVED
  *   permisos          : CLAVE, NOMBRE_PERMISO, CLAVE_CATEGORIA, DESCRIPCION
  */
 
-require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../config/schema.php';
 
 class Permission
 {
@@ -16,7 +16,7 @@ class Permission
 
     public function __construct()
     {
-        $this->db = getDBConnection();
+        $this->db = appDb();
     }
 
     /**

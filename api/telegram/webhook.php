@@ -27,7 +27,7 @@ const TELEGRAM_API   = 'https://api.telegram.org/bot' . BOT_TOKEN . '/';
 $logFile = __DIR__ . '/../../storage/logs/webhook.log';
 
 // ── Autoload mínimo ────────────────────────────────────────────────────────
-require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../config/schema.php';
 require_once __DIR__ . '/../../models/TelegramMessage.php';
 
 // ════════════════════════════════════════════════════════════════════════════

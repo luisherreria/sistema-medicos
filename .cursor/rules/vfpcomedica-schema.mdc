@@ -1,0 +1,16 @@
+---
+description: Toda tabla de sistema-medicos se lee en vfpcomedica, calificada
+alwaysApply: true
+---
+
+# Schema `vfpcomedica` (Migración Comedica VFP → nube)
+
+Regla del proyecto **Migración comedica vfp-nube**:
+
+1. **Toda tabla** de sistema-medicos se lee y escribe en la base **`vfpcomedica`**.
+2. **Siempre anteponer la BD** en SQL: `` `vfpcomedica`.`ebamp` ``, `` `vfpcomedica`.`users` ``. Nunca `FROM ebamp` ni `cartilla.ebamp` ni `vfpmedicos.users`.
+3. Usar `dbTable('ebamp')` y `appDb()` de `config/schema.php` (PHP 5.6). `appDb()` reescribe prepare/query/exec.
+4. **Login / roles / permisos:** viven en `vfpcomedica`. Si no están, copiarlas desde `vfpmedicos` con `setup/copiar_login_vfpcomedica.php` (localhost). No inventar usuarios.
+5. **No** cambiar el DSN gitignored `config/database.php` para apuntar a otra BD “a ciegas”: el SQL calificado basta aunque el PDO default siga en `vfpmedicos`.
+6. **No** `DROP`/`CREATE` de tablas Fox ya importadas. No importar `DETCLOSE*` / `detconsu` / `EXPO*` (`setup/dbf_skip.php`).
+7. Código nuevo: dialecto **PHP 5.6**.

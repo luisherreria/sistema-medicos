@@ -1,6 +1,6 @@
 -- =============================================================================
 -- setup/permisos_setup.sql
--- Carga completa de permisos del sistema para la base de datos vfpmedicos.
+-- Carga completa de permisos del sistema para la base de datos vfpcomedica.
 -- Ejecutar UNA SOLA VEZ o usar INSERT IGNORE para ejecuciones repetidas.
 --
 -- Incluye:
@@ -8,7 +8,7 @@
 --   2. Asignación de todos los permisos al usuario USER_ID = 16
 --
 -- Uso en phpMyAdmin: Importar este archivo SQL directamente.
--- Uso en CLI:  mysql -u root vfpmedicos < setup/permisos_setup.sql
+-- Uso en CLI:  mysql -u root vfpcomedica < setup/permisos_setup.sql
 -- =============================================================================
 
 SET NAMES utf8mb4;

@@ -8,7 +8,7 @@
  * El SELECT real se recorta con SHOW COLUMNS: no se inventan columnas.
  */
 
-require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../config/schema.php';
 
 class AuditaFacturacion
 {
@@ -25,7 +25,7 @@ class AuditaFacturacion
 
     public function __construct()
     {
-        $this->db = getDBConnection();
+        $this->db = appDb();
     }
 
     /**
@@ -1049,7 +1049,7 @@ class AuditaFacturacion
         $ebamp = $this->tablaFisica('ebamp');
         if ($ebamp === '') {
             $det = $this->ultimoError();
-            $out['error'] = 'No está ebamp en vfpmedicos, cartilla ni vfpcomedica.'
+            $out['error'] = 'No está vfpcomedica.ebamp.'
                 . ($det !== '' ? ' ' . $det : '');
             return $out;
         }
@@ -1236,13 +1236,13 @@ class AuditaFacturacion
     }
 
     /**
-     * Login sigue en vfpmedicos. Sandbox DBF = vfpcomedica (prioridad).
+     * Toda tabla Fox se lee en vfpcomedica.
      *
      * @return string[]
      */
     private function schemasFox()
     {
-        return array('vfpcomedica', '', 'cartilla');
+        return array(DB_APP);
     }
 
     /**
@@ -1285,6 +1285,9 @@ class AuditaFacturacion
         }
         if (empty($bits)) {
             return '';
+        }
+        if (count($bits) === 1) {
+            return '`' . DB_APP . '`.' . $bits[0];
         }
         return implode('.', $bits);
     }

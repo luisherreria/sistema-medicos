@@ -5,7 +5,7 @@
  * Dialecto PHP 5.6. PK asumida: id INT AUTO_INCREMENT.
  */
 
-require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../config/schema.php';
 
 class TablaGeneralModel
 {
@@ -26,7 +26,7 @@ class TablaGeneralModel
 
     public function __construct()
     {
-        $this->db = getDBConnection();
+        $this->db = appDb();
     }
 
     /**

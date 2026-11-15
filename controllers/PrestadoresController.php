@@ -1516,10 +1516,10 @@ class PrestadoresController
         }
     }
 
-    private function db(): PDO
+    private function db()
     {
-        require_once __DIR__ . '/../config/database.php';
-        return getDBConnection();
+        require_once __DIR__ . '/../config/schema.php';
+        return appDb();
     }
 
     private function jsonError(string $msg): void

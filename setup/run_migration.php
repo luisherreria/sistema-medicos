@@ -16,7 +16,7 @@ if (!in_array($host, ['127.0.0.1', '::1', 'localhost'])) {
     die('Acceso denegado.');
 }
 
-require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../config/schema.php';
 
 $sqlFile = __DIR__ . '/ebamp_migration.sql';
 if (!file_exists($sqlFile)) {
@@ -32,7 +32,7 @@ $statements = array_filter(
     )
 );
 
-$db = getDBConnection();
+$db = appDb();
 $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
 $ok  = 0;

@@ -56,6 +56,8 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+require_once __DIR__ . '/config/schema.php';
+
 // ── 3. CSRF token (generarlo si no existe) ────────────────────────────────
 if (empty($_SESSION['csrf_token'])) {
     if (function_exists('openssl_random_pseudo_bytes')) {

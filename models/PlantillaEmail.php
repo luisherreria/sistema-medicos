@@ -7,7 +7,7 @@
  * Columnas: id, codigo, nombre_uso, asunto, cuerpo, destinatarios, activo
  */
 
-require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../config/schema.php';
 
 class PlantillaEmail
 {
@@ -16,7 +16,7 @@ class PlantillaEmail
 
     public function __construct()
     {
-        $this->db = getDBConnection();
+        $this->db = appDb();
     }
 
     /**
