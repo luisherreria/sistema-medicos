@@ -13,7 +13,7 @@
  *   login   (GET)        → AuthController::showLogin()
  *   login   (POST)       → AuthController::login()
  *   logout               → AuthController::logout()
- *   audit-facturacion    → AuditaFacturacionController (form AUDITA)
+ *   audit-facturacion    → AuditaFacturacionController (AUDIFACT → SELEFACT → AUDITA)
  *   cierre-automatico    → AuditPadController (autscerr)
  *   liq-auditar          → AuditPadController (liqaaud)
  *   liq-sin-cerrar       → AuditPadController (LIQSCERR)
@@ -218,6 +218,7 @@ switch ($route) {
             case 'ajusfafi':         $controller->guardarAjusfafi(); break;
             case 'cambafil':         $controller->guardarCambafil(); break;
             case 'debitar':          $controller->guardarDebitar();  break;
+            case 'buscar_prestador': $controller->buscarPrestador(); break;
             default:                 $controller->index();           break;
         }
         break;

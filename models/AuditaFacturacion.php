@@ -876,4 +876,235 @@ class AuditaFacturacion
         }
         return '';
     }
+
+    /**
+     * AUDIFACT.tpresta Valid: SEEK ebamp ORDER matricula.
+     * ayudaPreN no migrado: si no hay fila, error.
+     *
+     * @param  string $tpresta
+     * @return array
+     */
+    public function buscarPrestador($tpresta)
+    {
+        $tpresta = strtoupper(trim((string) $tpresta));
+        $out = array(
+            'ok'       => false,
+            'tpresta'  => $tpresta,
+            'nombre'   => '',
+            'confact'  => false,
+            'valereci' => false,
+            'infoliq'  => '',
+            'error'    => '',
+        );
+        if ($tpresta === '') {
+            $out['error'] = 'Seleccione un Prestador para continuar...';
+            return $out;
+        }
+        $ebamp = $this->tablaFisica('ebamp');
+        if ($ebamp === '') {
+            $out['error'] = 'No está la tabla ebamp.';
+            return $out;
+        }
+        $cols = $this->columnasDeTabla($ebamp);
+        $cMat = $this->colEn($cols, 'matricula');
+        if ($cMat === null) {
+            $cMat = $this->colEn($cols, 'codigo');
+        }
+        if ($cMat === null) {
+            $out['error'] = 'ebamp no tiene matricula.';
+            return $out;
+        }
+        $cNom  = $this->colEn($cols, 'nombre');
+        $cConf = $this->colEn($cols, 'confact');
+        $cVal  = $this->colEn($cols, 'valereci');
+        $cInfo = $this->colEn($cols, 'infoliq');
+        $cCat  = $this->colEn($cols, 'categ');
+        $select = array('`' . $cMat . '` AS `matricula`');
+        if ($cNom !== null) {
+            $select[] = '`' . $cNom . '` AS `nombre`';
+        }
+        if ($cConf !== null) {
+            $select[] = '`' . $cConf . '` AS `confact`';
+        }
+        if ($cVal !== null) {
+            $select[] = '`' . $cVal . '` AS `valereci`';
+        }
+        if ($cInfo !== null) {
+            $select[] = '`' . $cInfo . '` AS `infoliq`';
+        }
+        $sql = 'SELECT ' . implode(',', $select) . ' FROM `' . $ebamp . '` WHERE TRIM(`' . $cMat . '`) = :p';
+        if ($cCat !== null) {
+            $sql .= ' AND TRIM(IFNULL(`' . $cCat . '`,\'\')) <> \'MECM\'';
+        }
+        $sql .= ' LIMIT 5';
+        try {
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute(array(':p' => $tpresta));
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->tablaError = $e->getMessage();
+            $out['error'] = $e->getMessage();
+            return $out;
+        }
+        if (empty($rows)) {
+            $out['error'] = 'Prestador no encontrado (ayudaPreN no migrado).';
+            return $out;
+        }
+        $row = $rows[0];
+        $out['ok'] = true;
+        $out['tpresta'] = isset($row['matricula']) ? trim((string) $row['matricula']) : $tpresta;
+        $out['nombre'] = isset($row['nombre']) ? (string) $row['nombre'] : '';
+        $out['confact'] = $this->esFlag(isset($row['confact']) ? $row['confact'] : '');
+        $out['valereci'] = $this->esFlag(isset($row['valereci']) ? $row['valereci'] : '');
+        $out['infoliq'] = isset($row['infoliq']) ? (string) $row['infoliq'] : '';
+        return $out;
+    }
+
+    /**
+     * AUDIFACT.Command1: COPY consulta → audifact UNIQUE
+     * coprestado+coperiodo+coobrasoc+cosucfac+conrofac.
+     * Lee consulta / audifact / detalle. No escribe DBF de trabajo.
+     *
+     * @param  string $tpresta
+     * @param  string $tperiodo
+     * @return array
+     */
+    public function listarCabeceras($tpresta, $tperiodo)
+    {
+        $tpresta  = trim((string) $tpresta);
+        $tperiodo = trim((string) $tperiodo);
+        $vacio = array(
+            'filas'     => array(),
+            'tabla_ok'  => false,
+            'tabla'     => '',
+            'error'     => '',
+        );
+        if ($tpresta === '') {
+            $vacio['error'] = 'Seleccione un Prestador para continuar...';
+            return $vacio;
+        }
+        $candidatos = array('consulta', 'audifact', 'detalle', 'detconsu', 'audifac2');
+        $i = 0;
+        $n = count($candidatos);
+        $ultimo = '';
+        for ($i = 0; $i < $n; $i++) {
+            $fis = $this->tablaFisica($candidatos[$i]);
+            if ($fis === '') {
+                continue;
+            }
+            $ultimo = $fis;
+            $cols = $this->columnasDeTabla($fis);
+            $cPre = $this->colEn($cols, 'coprestado');
+            $cOs  = $this->colEn($cols, 'coobrasoc');
+            $cSuc = $this->colEn($cols, 'cosucfac');
+            $cFac = $this->colEn($cols, 'conrofac');
+            if ($cPre === null || $cOs === null || $cSuc === null || $cFac === null) {
+                continue;
+            }
+            $grupo = array($cPre, $cOs, $cSuc, $cFac);
+            $cPer = $this->colEn($cols, 'coperiodo');
+            if ($cPer !== null) {
+                $grupo[] = $cPer;
+            }
+            $select = array();
+            $g = 0;
+            $ng = count($grupo);
+            for ($g = 0; $g < $ng; $g++) {
+                $select[] = '`' . $grupo[$g] . '`';
+            }
+            $extra = array(
+                'conomprest', 'cofecfac', 'conetofact', 'coivafact',
+                'cototalfac', 'cosegurofa', 'cofecnac', 'cargarap', 'refacnro',
+            );
+            $e = 0;
+            for ($e = 0; $e < 9; $e++) {
+                $real = $this->colEn($cols, $extra[$e]);
+                if ($real !== null && !in_array($real, $grupo, true)) {
+                    $select[] = 'MAX(`' . $real . '`) AS `' . $real . '`';
+                }
+            }
+            $sql = 'SELECT ' . implode(',', $select) . ' FROM `' . $fis . '`'
+                . ' WHERE TRIM(`' . $cPre . '`) = :p';
+            $params = array(':p' => $tpresta);
+            $sql .= ' GROUP BY `' . implode('`,`', $grupo) . '`';
+            if ($cPer !== null) {
+                $sql .= ' ORDER BY `' . $cPer . '` DESC, `' . $cFac . '` ASC';
+            } else {
+                $sql .= ' ORDER BY `' . $cFac . '` ASC';
+            }
+            $sql .= ' LIMIT 500';
+            try {
+                $stmt = $this->db->prepare($sql);
+                $stmt->execute($params);
+                $filas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            } catch (PDOException $e) {
+                $this->tablaError = $e->getMessage();
+                continue;
+            }
+            return array(
+                'filas'    => $filas,
+                'tabla_ok' => true,
+                'tabla'    => $fis,
+                'error'    => '',
+            );
+        }
+        $vacio['tabla'] = $ultimo;
+        $vacio['error'] = $this->tablaError !== ''
+            ? $this->tablaError
+            : 'No se encuentran registros para ese periodo, prestador... (consulta/audifact).';
+        return $vacio;
+    }
+
+    /**
+     * @param  string $nombre
+     * @return string
+     */
+    private function tablaFisica($nombre)
+    {
+        $needle = strtolower(trim((string) $nombre));
+        if ($needle === '') {
+            return '';
+        }
+        try {
+            $stmt = $this->db->query('SHOW TABLES');
+        } catch (PDOException $e) {
+            $this->tablaError = $e->getMessage();
+            return '';
+        }
+        if (!$stmt) {
+            return '';
+        }
+        while ($row = $stmt->fetch(PDO::FETCH_NUM)) {
+            if (!isset($row[0])) {
+                continue;
+            }
+            if (strtolower((string) $row[0]) === $needle) {
+                return (string) $row[0];
+            }
+        }
+        return '';
+    }
+
+    /**
+     * @param  string[] $cols
+     * @param  string   $nombre
+     * @return string|null
+     */
+    private function colEn($cols, $nombre)
+    {
+        return $this->colReal($nombre, $cols);
+    }
+
+    /**
+     * @param  mixed $v
+     * @return bool
+     */
+    private function esFlag($v)
+    {
+        if ($v === true || $v === 1) {
+            return true;
+        }
+        $s = strtoupper(trim((string) $v));
+        return ($s === '1' || $s === 'T' || $s === '.T.' || $s === 'S' || $s === 'SI' || $s === 'TRUE');
+    }
 }

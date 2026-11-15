@@ -4,7 +4,8 @@
  * Form VFP AUDITA — menú Auditar Facturación.
  * Dialecto PHP 5.6.
  *
- * Init: obrasoc, suc, factura, prestador, periodo, TITULO, fueamed,
+ * Flujo VFP: AUDIFACT (periodo/prestador) → SELEFACT (grid audifact) → AUDITA.
+ * Init AUDITA: obrasoc, suc, factura, prestador, periodo, TITULO, fueamed,
  * tcodaud, nombre, tapagada, tyacerrada.
  * Permiso MNU_AF_AUDITAR. Route audit-facturacion.
  */
@@ -33,36 +34,40 @@ class AuditaFacturacionController
         );
         $csrfToken = isset($_SESSION['csrf_token']) ? (string) $_SESSION['csrf_token'] : '';
         $forzarGrid = isset($_GET['grid']) && (string) $_GET['grid'] === '1';
-        $hayFiltro = ($init['obrasoc'] !== '' || $init['suc'] !== '' || $init['factura'] !== ''
-            || $init['prestador'] !== '' || $init['periodo'] !== '');
-        if (!$hayFiltro && !$forzarGrid) {
-            $tablaOk = true;
-            $errorTabla = '';
-            $tablaUsada = '';
-            $facturas = array();
-            $model = new AuditaFacturacion();
-            try {
-                $sel = $model->listarFacturas();
-                $facturas = $sel['filas'];
-                $tablaOk = !empty($sel['tabla_ok']);
-                if (isset($sel['error']) && (string) $sel['error'] !== '') {
-                    $errorTabla = (string) $sel['error'];
-                }
-            } catch (PDOException $e) {
-                $tablaOk = false;
-                $errorTabla = $e->getMessage();
-            }
-            if ($errorTabla === '') {
-                $errorTabla = $model->ultimoError();
-            }
-            $tablaUsada = $model->tablaNombre();
-            require_once __DIR__ . '/../views/audita/selector.php';
+        $paso = isset($_GET['paso']) ? strtolower(trim((string) $_GET['paso'])) : '';
+        $hayFactura = ($init['obrasoc'] !== '' && $init['factura'] !== ''
+            && $init['prestador'] !== '' && $init['periodo'] !== '');
+        if ($hayFactura || $forzarGrid) {
+            $columnas = $this->columnasGrid();
+            $botones  = $this->botonesVisibles();
+            require_once __DIR__ . '/../views/audita/index.php';
             return;
         }
-        $columnas  = $this->columnasGrid();
-        $botones   = $this->botonesVisibles();
+        if ($paso === 'selefact' && $init['prestador'] !== '') {
+            $this->pantallaSelefact($init, $pageTitle, $breadcrumb, $csrfToken);
+            return;
+        }
+        require_once __DIR__ . '/../views/audita/audifact.php';
+    }
 
-        require_once __DIR__ . '/../views/audita/index.php';
+    /**
+     * AUDIFACT.tpresta Valid.
+     */
+    public function buscarPrestador()
+    {
+        $this->requireModulo();
+        header('Content-Type: application/json; charset=utf-8');
+        $tpresta = isset($_GET['prestador']) ? trim((string) $_GET['prestador']) : '';
+        if ($tpresta === '' && isset($_POST['prestador'])) {
+            $tpresta = trim((string) $_POST['prestador']);
+        }
+        try {
+            $out = (new AuditaFacturacion())->buscarPrestador($tpresta);
+            echo json_encode($out, JSON_UNESCAPED_UNICODE);
+        } catch (PDOException $e) {
+            $this->jsonError('Error al leer ebamp: ' . $e->getMessage());
+        }
+        exit;
     }
 
     public function listado()
@@ -566,6 +571,54 @@ class AuditaFacturacionController
             $this->jsonError('Error al debitar: ' . $e->getMessage());
         }
         exit;
+    }
+
+    /**
+     * SELEFACT: Grid1 RecordSource audifact (COPY consulta del Command1).
+     *
+     * @param array  $init
+     * @param string $pageTitle
+     * @param array  $breadcrumb
+     * @param string $csrfToken
+     */
+    private function pantallaSelefact(array $init, $pageTitle, array $breadcrumb, $csrfToken)
+    {
+        $periodo = $init['periodo'];
+        $tpresta = $init['prestador'];
+        $nombre  = $init['nombre'];
+        $tconfact = isset($_GET['tconfact']) ? trim((string) $_GET['tconfact']) : '';
+        $infoliq = '';
+        $errorTabla = '';
+        $tablaOk = true;
+        $tablaUsada = '';
+        $facturas = array();
+        $model = new AuditaFacturacion();
+        try {
+            $pre = $model->buscarPrestador($tpresta);
+            if (!empty($pre['ok'])) {
+                if ($nombre === '') {
+                    $nombre = $pre['nombre'];
+                }
+                $tpresta = $pre['tpresta'];
+                $infoliq = $pre['infoliq'];
+                if ($tconfact === '' && !empty($pre['confact'])) {
+                    $tconfact = 'PRESTADOR CON FACTURA';
+                }
+            }
+            $sel = $model->listarCabeceras($tpresta, $periodo);
+            $facturas = $sel['filas'];
+            $tablaOk = !empty($sel['tabla_ok']);
+            $tablaUsada = isset($sel['tabla']) ? (string) $sel['tabla'] : '';
+            $errorTabla = isset($sel['error']) ? (string) $sel['error'] : '';
+        } catch (PDOException $e) {
+            $tablaOk = false;
+            $errorTabla = $e->getMessage();
+        }
+        if ($errorTabla === '') {
+            $errorTabla = $model->ultimoError();
+        }
+        $verCierre = ($this->operador() === 'DIEG' || $this->operador() === 'LUIS');
+        require_once __DIR__ . '/../views/audita/selefact.php';
     }
 
     /**
