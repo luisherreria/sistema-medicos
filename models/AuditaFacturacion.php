@@ -49,82 +49,38 @@ class AuditaFacturacion
         }
         $this->tablaReal = '';
         $this->tablaError = '';
-        $map = array();
-        try {
-            $stmt = $this->db->query('SHOW TABLES');
-        } catch (PDOException $e) {
-            $this->tablaError = $e->getMessage();
-            return '';
-        }
-        if ($stmt) {
-            while ($row = $stmt->fetch(PDO::FETCH_NUM)) {
-                if (!isset($row[0]) || (string) $row[0] === '') {
-                    continue;
-                }
-                $map[strtolower((string) $row[0])] = (string) $row[0];
-            }
-        }
-        if (empty($map)) {
-            $this->tablaError = 'SHOW TABLES no devolvió tablas en vfpmedicos.';
-            return '';
-        }
-
-        $candidatos = array('audifac2', 'audifact', 'audifac', 'audif2', 'detalle');
-        foreach ($map as $low => $actual) {
-            if (strpos($low, 'audifac') !== false || $low === 'audif2') {
-                $candidatos[] = $low;
-            }
-        }
-
+        $candidatos = array('audifac2', 'audifact', 'audifac', 'audif2', 'detalle', 'detconsu');
         $mejor = '';
         $mejorHits = 0;
-        $vistos = array();
         $revisadas = array();
         $i = 0;
         $n = count($candidatos);
         for ($i = 0; $i < $n; $i++) {
-            $c = $candidatos[$i];
-            if (!isset($map[$c]) || isset($vistos[$c])) {
+            $fis = $this->tablaFisica($candidatos[$i]);
+            if ($fis === '') {
                 continue;
             }
-            $vistos[$c] = true;
-            $actual = $map[$c];
-            $cols = $this->columnasDeTabla($actual);
+            $cols = $this->columnasDeTabla($fis);
             $hits = $this->cuentaCamposAudita($cols);
-            $revisadas[] = $actual . ' (' . $hits . ' campos de AUDITA)';
+            $revisadas[] = $fis . ' (' . $hits . ' campos de AUDITA)';
             if ($hits >= 5) {
-                $this->tablaReal = $actual;
+                $this->tablaReal = $fis;
                 $this->tablaError = '';
                 return $this->tablaReal;
             }
             if ($hits > $mejorHits) {
                 $mejorHits = $hits;
-                $mejor = $actual;
+                $mejor = $fis;
             }
         }
-
         if ($mejor !== '' && $mejorHits > 0) {
             $this->tablaReal = $mejor;
             $this->tablaError = '';
             return $this->tablaReal;
         }
-
-        $parecidas = array();
-        foreach ($map as $low => $actual) {
-            if (strpos($low, 'audi') !== false || strpos($low, 'fact') !== false
-                || strpos($low, 'detal') !== false || $low === 'consulta'
-            ) {
-                $parecidas[] = $actual;
-            }
-        }
-        $this->tablaError = 'No está la tabla audifac2 en vfpmedicos (VFP: c:\\bases\\AUDIFAC2).';
+        $this->tablaError = 'No está audifac2 en vfpmedicos/cartilla/vfpcomedica (VFP: c:\\bases\\AUDIFAC2).';
         if (!empty($revisadas)) {
             $this->tablaError .= ' Revisadas: ' . implode(', ', $revisadas) . '.';
-        }
-        if (!empty($parecidas)) {
-            $this->tablaError .= ' Parecidas: ' . implode(', ', $parecidas) . '.';
-        } else {
-            $this->tablaError .= ' Importe el DBF AUDIFAC2 (no se crea el esquema acá).';
         }
         return '';
     }
@@ -135,12 +91,12 @@ class AuditaFacturacion
      */
     private function columnasDeTabla($nombre)
     {
-        $safe = str_replace(array('`', '.', ' ', ';'), '', (string) $nombre);
-        if ($safe === '') {
+        $ident = $this->sqlIdent($nombre);
+        if ($ident === '') {
             return array();
         }
         try {
-            $stmt = $this->db->query('SHOW COLUMNS FROM `' . $safe . '`');
+            $stmt = $this->db->query('SHOW COLUMNS FROM ' . $ident);
         } catch (PDOException $e) {
             $this->tablaError = $e->getMessage();
             return array();
@@ -199,7 +155,7 @@ class AuditaFacturacion
         if ($t === '') {
             $t = self::TABLA;
         }
-        return '`' . str_replace(array('`', '.'), '', $t) . '`';
+        return $this->sqlIdent($t);
     }
 
     /**
@@ -908,7 +864,8 @@ class AuditaFacturacion
         $ebamp = $this->tablaFisica('ebamp');
         if ($ebamp === '') {
             $det = $this->ultimoError();
-            $out['error'] = 'No está la tabla ebamp.' . ($det !== '' ? ' ' . $det : '');
+            $out['error'] = 'No está ebamp en vfpmedicos, cartilla ni vfpcomedica.'
+                . ($det !== '' ? ' ' . $det : '');
             return $out;
         }
         $cols = $this->columnasDeTabla($ebamp);
@@ -952,7 +909,8 @@ class AuditaFacturacion
             $wheres[] = 'TRIM(`' . $cCod . '`) = :pcod';
             $params[':pcod'] = $tpresta;
         }
-        $sql = 'SELECT ' . implode(',', $select) . ' FROM `' . $ebamp . '` WHERE (' . implode(' OR ', $wheres) . ')';
+        $sql = 'SELECT ' . implode(',', $select) . ' FROM ' . $this->sqlIdent($ebamp)
+            . ' WHERE (' . implode(' OR ', $wheres) . ')';
         if ($cCat !== null) {
             $sql .= ' AND TRIM(IFNULL(`' . $cCat . '`,\'\')) <> \'MECM\'';
         }
@@ -1054,7 +1012,7 @@ class AuditaFacturacion
                     $select[] = 'MAX(`' . $real . '`) AS `' . $real . '`';
                 }
             }
-            $sql = 'SELECT ' . implode(',', $select) . ' FROM `' . $fis . '`'
+            $sql = 'SELECT ' . implode(',', $select) . ' FROM ' . $this->sqlIdent($fis)
                 . ' WHERE TRIM(`' . $cPre . '`) = :p';
             $params = array(':p' => $tpresta);
             $sql .= ' GROUP BY `' . implode('`,`', $grupo) . '`';
@@ -1090,35 +1048,69 @@ class AuditaFacturacion
      * @param  string $nombre
      * @return string
      */
+    /**
+     * Login sigue en vfpmedicos. Las DBF Fox pueden estar en cartilla o vfpcomedica.
+     *
+     * @return string[]
+     */
+    private function schemasFox()
+    {
+        return array('', 'cartilla', 'vfpcomedica');
+    }
+
+    /**
+     * @param  string $qualified vfpcomedica.ebamp o ebamp
+     * @return string
+     */
+    private function sqlIdent($qualified)
+    {
+        $parts = explode('.', (string) $qualified);
+        $bits = array();
+        $i = 0;
+        $n = count($parts);
+        for ($i = 0; $i < $n; $i++) {
+            $p = preg_replace('/[^A-Za-z0-9_]/', '', $parts[$i]);
+            if ($p !== '') {
+                $bits[] = '`' . $p . '`';
+            }
+        }
+        if (empty($bits)) {
+            return '';
+        }
+        return implode('.', $bits);
+    }
+
+    /**
+     * @param  string $nombre
+     * @return string nombre calificado si hace falta (vfpcomedica.ebamp)
+     */
     private function tablaFisica($nombre)
     {
-        $safe = str_replace(array('`', '.', ' ', ';'), '', (string) $nombre);
-        if ($safe === '') {
+        $base = preg_replace('/[^A-Za-z0-9_]/', '', (string) $nombre);
+        if ($base === '') {
             return '';
         }
-        try {
-            $probe = $this->db->query('SELECT 1 FROM `' . $safe . '` LIMIT 1');
-            if ($probe) {
-                return $safe;
+        $schemas = $this->schemasFox();
+        $ultimoErr = '';
+        $s = 0;
+        $ns = count($schemas);
+        for ($s = 0; $s < $ns; $s++) {
+            $q = ($schemas[$s] === '') ? $base : ($schemas[$s] . '.' . $base);
+            $ident = $this->sqlIdent($q);
+            if ($ident === '') {
+                continue;
             }
-        } catch (PDOException $e) {
-            $this->tablaError = $e->getMessage();
-        }
-        $cols = $this->columnasDeTabla($safe);
-        if (!empty($cols)) {
-            return $safe;
-        }
-        try {
-            $stmt = $this->db->query("SHOW TABLES LIKE " . $this->db->quote($safe));
-        } catch (PDOException $e) {
-            $this->tablaError = $e->getMessage();
-            return '';
-        }
-        if ($stmt) {
-            $row = $stmt->fetch(PDO::FETCH_NUM);
-            if ($row && isset($row[0]) && trim((string) $row[0]) !== '') {
-                return (string) $row[0];
+            try {
+                $probe = $this->db->query('SELECT 1 FROM ' . $ident . ' LIMIT 1');
+                if ($probe) {
+                    return $q;
+                }
+            } catch (PDOException $e) {
+                $ultimoErr = $e->getMessage();
             }
+        }
+        if ($ultimoErr !== '') {
+            $this->tablaError = $ultimoErr;
         }
         return '';
     }
