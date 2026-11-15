@@ -74,6 +74,12 @@ class AuditaFacturacion
             'conomprest',
             'coempreact',
             'amotivo',
+            'cofuerapa',
+            'afilcont',
+            'cousuario',
+            'cofechacar',
+            'cohoracar',
+            'cocateg',
         );
     }
 
@@ -406,6 +412,107 @@ class AuditaFacturacion
             'text11' => 0,
             'text16' => 0,
         );
+    }
+
+    /**
+     * INSERT en audifac2. Solo columnas que existan (SHOW COLUMNS).
+     * No toca consulta/detalle/ebamp/detauto.
+     *
+     * @param  array $campos
+     * @return int nroorden o 0
+     */
+    public function insertarFila(array $campos)
+    {
+        $reales = $this->columnasReales();
+        if (empty($reales)) {
+            return 0;
+        }
+        if ($this->colReal('nroorden', $reales) !== null && (!isset($campos['nroorden']) || $campos['nroorden'] === '')) {
+            $stmt = $this->db->query('SELECT COALESCE(MAX(`nroorden`),0) + 1 FROM `' . self::TABLA . '`');
+            $campos['nroorden'] = (int) $stmt->fetchColumn();
+        }
+        $cols   = array();
+        $ph     = array();
+        $params = array();
+        foreach ($campos as $k => $v) {
+            $real = $this->colReal($k, $reales);
+            if ($real === null) {
+                continue;
+            }
+            $cols[] = '`' . $real . '`';
+            $ph[] = ':' . $real;
+            $params[':' . $real] = $v;
+        }
+        if (empty($cols)) {
+            return 0;
+        }
+        $sql = 'INSERT INTO `' . self::TABLA . '` (' . implode(',', $cols) . ') VALUES (' . implode(',', $ph) . ')';
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        if (isset($campos['nroorden'])) {
+            return (int) $campos['nroorden'];
+        }
+        return $stmt->rowCount() > 0 ? 1 : 0;
+    }
+
+    /**
+     * CAMBPRES.Command1: REPLACE sobre la fila actual (nroorden).
+     * Si $todas: REPLACE ALL ... FOR cocodprest = prestant (sin tocar coseguros).
+     *
+     * @param  int   $nroorden
+     * @param  array $campos
+     * @param  bool  $todas
+     * @param  bool  $ccanti
+     * @param  string $prestant
+     * @return int
+     */
+    public function actualizarPrestacion($nroorden, array $campos, $todas, $ccanti, $prestant)
+    {
+        $reales = $this->columnasReales();
+        if (empty($reales)) {
+            return 0;
+        }
+        $set = array();
+        $params = array();
+        foreach ($campos as $k => $v) {
+            $real = $this->colReal($k, $reales);
+            if ($real === null) {
+                continue;
+            }
+            $set[] = '`' . $real . '` = :' . $real;
+            $params[':' . $real] = $v;
+        }
+        if (empty($set)) {
+            return 0;
+        }
+        if ($todas && $this->colReal('cocodprest', $reales) !== null && $prestant !== '') {
+            $sql = 'UPDATE `' . self::TABLA . '` SET ' . implode(',', $set)
+                . ' WHERE TRIM(`cocodprest`) = :prestant';
+            $params[':prestant'] = $prestant;
+        } elseif ($this->colReal('nroorden', $reales) !== null) {
+            $sql = 'UPDATE `' . self::TABLA . '` SET ' . implode(',', $set)
+                . ' WHERE `nroorden` = :nro LIMIT 1';
+            $params[':nro'] = (int) $nroorden;
+        } else {
+            return 0;
+        }
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $n = $stmt->rowCount();
+        if ($ccanti && $this->colReal('cocantpres', $reales) !== null
+            && $this->colReal('cocodprest', $reales) !== null && $prestant !== ''
+            && isset($campos['cocantpres'])
+        ) {
+            $st2 = $this->db->prepare(
+                'UPDATE `' . self::TABLA . '` SET `cocantpres` = :cant WHERE TRIM(`cocodprest`) = :prestant'
+            );
+            $st2->execute(array(
+                ':cant'     => $campos['cocantpres'],
+                ':prestant' => $prestant,
+            ));
+            $n += $st2->rowCount();
+        }
+        return $n;
     }
 
     /**

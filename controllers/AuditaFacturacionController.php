@@ -134,6 +134,14 @@ class AuditaFacturacionController
         if ($form === '' || !isset($mapa[$form])) {
             $this->jsonError('Formulario no citado en AUDITA.SCX.');
         }
+        $abiertos = array('newcons' => 1, 'cambpres' => 1, 'ajusfact' => 1, 'ajusfafi' => 1);
+        if (isset($abiertos[$form])) {
+            echo json_encode(array(
+                'ok'   => true,
+                'form' => $form,
+            ), JSON_UNESCAPED_UNICODE);
+            exit;
+        }
         echo json_encode(array(
             'ok'        => false,
             'pendiente' => true,
@@ -141,6 +149,331 @@ class AuditaFacturacionController
             'error'     => 'Form VFP `' . $mapa[$form] . '` no migrado (DO FORM en AUDITA).',
         ), JSON_UNESCAPED_UNICODE);
         exit;
+    }
+
+    /**
+     * NEWCONS.Command1 — APPEND en audifac2 (extract). No consulta/detalle/ebamp.
+     */
+    public function guardarNewcons()
+    {
+        $this->requireModulo();
+        $this->requireCsrf();
+        header('Content-Type: application/json; charset=utf-8');
+        $tafil = isset($_POST['tafiliado']) ? trim((string) $_POST['tafiliado']) : '';
+        $fecha = isset($_POST['tfecha']) ? trim((string) $_POST['tfecha']) : '';
+        $tpres = isset($_POST['tpres']) ? trim((string) $_POST['tpres']) : '';
+        $tcant = isset($_POST['tcant']) ? (float) $_POST['tcant'] : 0;
+        $tfact = isset($_POST['tfact']) ? (float) $_POST['tfact'] : 0;
+        $timpo = isset($_POST['timpo']) ? (float) $_POST['timpo'] : 0;
+        $tcose = isset($_POST['tcose']) ? (float) $_POST['tcose'] : 0;
+        $tcosep = isset($_POST['tcosep']) ? (float) $_POST['tcosep'] : 0;
+        $exc   = !empty($_POST['chkexccos']);
+        $tplan = isset($_POST['tplan']) ? trim((string) $_POST['tplan']) : '';
+        if (strlen($tafil) < 3) {
+            $this->jsonError('Afiliado: longitud mínima 3 (NEWCONS.Command1).');
+        }
+        if (strlen($fecha) < 3) {
+            $this->jsonError('Fecha vacía (NEWCONS.Command1).');
+        }
+        if ($tcant > 5 && ($tpres === 'PREST' || $tpres === 'MEDICA')) {
+            $this->jsonError('Supera el Valor Maximo Permitido (5 max)');
+        }
+        if ($tfact > 150 && ($tpres === 'PREST' || $tpres === 'MEDICA')) {
+            $this->jsonError('Supera el Valor Maximo Permitido (150 max)');
+        }
+        if ($exc) {
+            $tcosep = 0;
+        }
+        $codebito = isset($_POST['debito']) ? trim((string) $_POST['debito']) : '';
+        $cocadena = '';
+        if ($timpo < $tfact) {
+            $codebito = '010';
+            $cocadena = 'DIFERENCIA DE IMPORTE';
+        }
+        $init = $this->initParams();
+        $fila = array(
+            'cocodprest' => $tpres,
+            'conombpres' => isset($_POST['tnpres']) ? trim((string) $_POST['tnpres']) : '',
+            'cocantpres' => $tcant,
+            'cofacturad' => $tfact,
+            'coimporte'  => $timpo,
+            'cocoseguro' => $tcose,
+            'cosegpres'  => $tcosep,
+            'coexccos'   => $exc ? 1 : 0,
+            'coobrasoc'  => isset($_POST['tobra']) ? trim((string) $_POST['tobra']) : $init['obrasoc'],
+            'coprestado' => isset($_POST['tpresta']) ? trim((string) $_POST['tpresta']) : $init['prestador'],
+            'coafiliado' => $tafil,
+            'conompac'   => isset($_POST['tnomafil']) ? trim((string) $_POST['tnomafil']) : '',
+            'coplan'     => $tplan,
+            'cosucfac'   => isset($_POST['tsuc']) ? trim((string) $_POST['tsuc']) : $init['suc'],
+            'conrofac'   => isset($_POST['tfac']) ? trim((string) $_POST['tfac']) : $init['factura'],
+            'coperiodo'  => isset($_POST['tperi']) ? trim((string) $_POST['tperi']) : $init['periodo'],
+            'cofeccons'  => $fecha,
+            'codebito'   => $codebito,
+            'coautoriz'  => isset($_POST['autoriza']) ? trim((string) $_POST['autoriza']) : '',
+            'coleyedeb'  => isset($_POST['tleyedeb']) ? trim((string) $_POST['tleyedeb']) : '',
+            'cocadena'   => $cocadena,
+            'cofuerapa'  => (strpos($tplan, 'FP') !== false) ? 1 : 0,
+            'coempreact' => isset($_POST['empresa']) ? trim((string) $_POST['empresa']) : '',
+            'cousuario'  => $this->operador(),
+            'cofechacar' => date('Y-m-d'),
+            'cohoracar'  => date('H:i:s'),
+        );
+        try {
+            $nro = (new AuditaFacturacion())->insertarFila($fila);
+            echo json_encode(array('ok' => true, 'nroorden' => $nro), JSON_UNESCAPED_UNICODE);
+        } catch (PDOException $e) {
+            $this->jsonError('Error al agregar consulta: ' . $e->getMessage());
+        }
+        exit;
+    }
+
+    /**
+     * CAMBPRES.Command1 — REPLACE fila / todas iguales.
+     */
+    public function guardarCambpres()
+    {
+        $this->requireModulo();
+        $this->requireCsrf();
+        header('Content-Type: application/json; charset=utf-8');
+        $nro     = isset($_POST['nroorden']) ? (int) $_POST['nroorden'] : 0;
+        $tpres   = isset($_POST['tpres']) ? trim((string) $_POST['tpres']) : '';
+        $tnpres  = isset($_POST['tnpres']) ? trim((string) $_POST['tnpres']) : '';
+        $tcant   = isset($_POST['tcant']) ? (float) $_POST['tcant'] : 0;
+        $tfact   = isset($_POST['tfact']) ? (float) $_POST['tfact'] : 0;
+        $timpo   = isset($_POST['timpo']) ? (float) $_POST['timpo'] : 0;
+        $tcose   = isset($_POST['tcose']) ? (float) $_POST['tcose'] : 0;
+        $tcosep  = isset($_POST['tcospres']) ? (float) $_POST['tcospres'] : 0;
+        $exc     = !empty($_POST['chkexccos']);
+        $todas   = !empty($_POST['todas']);
+        $ccanti  = !empty($_POST['ccanti']);
+        $prestant = isset($_POST['prestant']) ? trim((string) $_POST['prestant']) : $tpres;
+        $ttagrupo = isset($_POST['ttagrupo']) ? strtoupper(trim((string) $_POST['ttagrupo'])) : '';
+        if ($tcant > 5 && ($tpres === 'PREST' || $tpres === 'MEDICA')) {
+            $this->jsonError('Supera el Valor Maximo Permitido (5 max)');
+        }
+        if ($exc) {
+            $tcosep = 0;
+        }
+        if ($tcosep > $tcose) {
+            $tcose = $tcosep;
+        }
+        if ($timpo > $tfact) {
+            $timpo = $tfact;
+        }
+        $op = strtoupper($this->operador());
+        if ($tpres === '027' && $op !== 'DIEG' && $op !== 'LUIS' && $op !== 'NOE') {
+            $timpo = 0;
+        }
+        $codebito = '';
+        $cocadena = '';
+        $dniafil  = '';
+        if ($timpo < $tfact) {
+            $codebito = '010';
+            $cocadena = 'DIFERENCIA DE IMPORTE';
+        }
+        if ($ttagrupo === 'MEDICAME' || $ttagrupo === 'CONTRAST' || $op === 'DIEG' || $op === 'DIE'
+            || ($tpres === '027' && ($op === 'DIEG' || $op === 'LUIS'))
+        ) {
+            $dniafil = 'AJVALIMP';
+        }
+        if ($todas) {
+            $campos = array(
+                'cocodprest' => $tpres,
+                'conombpres' => $tnpres,
+                'cofacturad' => $tfact,
+                'coimporte'  => $timpo,
+            );
+            if ($codebito !== '') {
+                $campos['codebito'] = $codebito;
+                $campos['cocadena'] = $cocadena;
+            }
+            if ($dniafil !== '') {
+                $campos['dniafil'] = $dniafil;
+            }
+        } else {
+            $campos = array(
+                'cocodprest' => $tpres,
+                'conombpres' => $tnpres,
+                'cocantpres' => $tcant,
+                'cofacturad' => $tfact,
+                'coimporte'  => $timpo,
+                'cocoseguro' => $tcose,
+                'cosegpres'  => $tcosep,
+                'coexccos'   => $exc ? 1 : 0,
+            );
+            if ($codebito !== '') {
+                $campos['codebito'] = $codebito;
+                $campos['cocadena'] = $cocadena;
+            }
+            if ($dniafil !== '') {
+                $campos['dniafil'] = $dniafil;
+            }
+        }
+        try {
+            $n = (new AuditaFacturacion())->actualizarPrestacion($nro, $campos, $todas, $ccanti, $prestant);
+            echo json_encode(array('ok' => true, 'filas' => $n), JSON_UNESCAPED_UNICODE);
+        } catch (PDOException $e) {
+            $this->jsonError('Error al cambiar prestación: ' . $e->getMessage());
+        }
+        exit;
+    }
+
+    /**
+     * AJUSFACT.Command1 — APPEND audifac2.
+     */
+    public function guardarAjusfact()
+    {
+        $this->requireModulo();
+        $this->requireCsrf();
+        header('Content-Type: application/json; charset=utf-8');
+        $tpres = isset($_POST['tpres']) ? trim((string) $_POST['tpres']) : '';
+        if (strlen($tpres) < 2) {
+            $this->jsonError('Prestacion: longitud mínima 2 (AJUSFACT.Command1).');
+        }
+        $tfact = isset($_POST['tfact']) ? (float) $_POST['tfact'] : 0;
+        $timpo = isset($_POST['timpo']) ? (float) $_POST['timpo'] : 0;
+        if (($tpres === '002' || $tpres === '004') && $tfact > 0 && $timpo > 0) {
+            $timpo = 0;
+        }
+        $op = strtoupper($this->operador());
+        if ($op === 'DIEG' || $op === 'DIE' || $op === 'LUIS') {
+            // usa timpo del form
+        } elseif ($tpres === '041' || $tpres === '002' || $tpres === '004' || $tpres === '027') {
+            $timpo = 0;
+        } else {
+            $timpo = $tfact;
+        }
+        if ($tpres === '002') {
+            $timpo = isset($_POST['timpo']) ? (float) $_POST['timpo'] : 0;
+        }
+        $codebito = '';
+        $cocadena = '';
+        if ($tpres !== '004' && $tpres !== '005' && $tpres !== '006' && $tpres !== '003') {
+            $codebito = '161';
+            $cocadena = 'PRACTICA NO CONVENIDA CON OS';
+        }
+        if ($tpres === '014') {
+            $codebito = '171';
+            $cocadena = 'NO CORRESPONDE FACTURAR A COMEDICA SA';
+        }
+        $init = $this->initParams();
+        $fila = array(
+            'cocodprest' => $tpres,
+            'conombpres' => isset($_POST['tnpres']) ? trim((string) $_POST['tnpres']) : '',
+            'cocantpres' => isset($_POST['tcant']) ? (float) $_POST['tcant'] : 1,
+            'cofacturad' => $tfact,
+            'coimporte'  => $timpo,
+            'cocoseguro' => isset($_POST['tcose']) ? (float) $_POST['tcose'] : 0,
+            'cosegpres'  => isset($_POST['tcosepre']) ? (float) $_POST['tcosepre'] : 0,
+            'coobrasoc'  => isset($_POST['tobra']) ? trim((string) $_POST['tobra']) : $init['obrasoc'],
+            'coprestado' => isset($_POST['tpresta']) ? trim((string) $_POST['tpresta']) : $init['prestador'],
+            'coafiliado' => isset($_POST['tafil']) ? trim((string) $_POST['tafil']) : '1',
+            'conompac'   => isset($_POST['tnomafil']) ? trim((string) $_POST['tnomafil']) : 'Ajuste',
+            'coplan'     => isset($_POST['tplan']) ? trim((string) $_POST['tplan']) : '',
+            'cosucfac'   => isset($_POST['tsuc']) ? trim((string) $_POST['tsuc']) : $init['suc'],
+            'conrofac'   => isset($_POST['tfac']) ? trim((string) $_POST['tfac']) : $init['factura'],
+            'coperiodo'  => isset($_POST['tperi']) ? trim((string) $_POST['tperi']) : $init['periodo'],
+            'cofeccons'  => isset($_POST['tfecha']) ? trim((string) $_POST['tfecha']) : '',
+            'codebito'   => $codebito,
+            'cocadena'   => $cocadena,
+            'cousuario'  => $this->operador(),
+            'cofechacar' => date('Y-m-d'),
+            'cohoracar'  => date('H:i:s'),
+            'afilcont'   => 0,
+            'amotivo'    => '',
+            'cofuerapa'  => 1,
+        );
+        try {
+            $nro = (new AuditaFacturacion())->insertarFila($fila);
+            echo json_encode(array('ok' => true, 'nroorden' => $nro), JSON_UNESCAPED_UNICODE);
+        } catch (PDOException $e) {
+            $this->jsonError('Error al ajustar valor: ' . $e->getMessage());
+        }
+        exit;
+    }
+
+    /**
+     * AJUSFAFI.Command3 — APPEND audifac2.
+     */
+    public function guardarAjusfafi()
+    {
+        $this->requireModulo();
+        $this->requireCsrf();
+        header('Content-Type: application/json; charset=utf-8');
+        $tpres = isset($_POST['tpres']) ? trim((string) $_POST['tpres']) : '';
+        $tfact = isset($_POST['tfact']) ? (float) $_POST['tfact'] : 0;
+        $timpo = isset($_POST['timpo']) ? (float) $_POST['timpo'] : 0;
+        if ($tpres === '041' || $tpres === '002') {
+            $timpo = 0;
+        }
+        $op = strtoupper($this->operador());
+        if ($op === 'DIEG' || $op === 'DIE' || $op === 'LUIS') {
+            // timpo del form (salvo 041/002 ya a 0)
+        } elseif ($tpres === '041' || $tpres === '002' || $tpres === '027') {
+            $timpo = 0;
+        } else {
+            $timpo = $tfact;
+        }
+        $codebito = '';
+        $cocadena = '';
+        if ($tpres !== '004' && $tpres !== '005' && $tpres !== '006' && $tpres !== '003') {
+            $codebito = '161';
+            $cocadena = 'PRACTICA NO CONVENIDA CON OS';
+        }
+        if ($tpres === '014') {
+            $codebito = '171';
+            $cocadena = 'NO CORRESPONDE FACTURAR A COMEDICA SA';
+        }
+        $init = $this->initParams();
+        $fila = array(
+            'cocodprest' => $tpres,
+            'conombpres' => isset($_POST['tnpres']) ? trim((string) $_POST['tnpres']) : '',
+            'cocantpres' => isset($_POST['tcant']) ? (float) $_POST['tcant'] : 1,
+            'cofacturad' => $tfact,
+            'coimporte'  => $timpo,
+            'cocoseguro' => isset($_POST['tcose']) ? (float) $_POST['tcose'] : 0,
+            'cosegpres'  => isset($_POST['tcosepre']) ? (float) $_POST['tcosepre'] : 0,
+            'coobrasoc'  => isset($_POST['tobra']) ? trim((string) $_POST['tobra']) : $init['obrasoc'],
+            'coprestado' => isset($_POST['tpresta']) ? trim((string) $_POST['tpresta']) : $init['prestador'],
+            'coafiliado' => isset($_POST['tafil']) ? trim((string) $_POST['tafil']) : '',
+            'conompac'   => isset($_POST['tnomafil']) ? trim((string) $_POST['tnomafil']) : '',
+            'coplan'     => isset($_POST['tplan']) ? trim((string) $_POST['tplan']) : '',
+            'cosucfac'   => isset($_POST['tsuc']) ? trim((string) $_POST['tsuc']) : $init['suc'],
+            'conrofac'   => isset($_POST['tfac']) ? trim((string) $_POST['tfac']) : $init['factura'],
+            'coperiodo'  => isset($_POST['tperi']) ? trim((string) $_POST['tperi']) : $init['periodo'],
+            'cofeccons'  => isset($_POST['tfecha']) ? trim((string) $_POST['tfecha']) : '',
+            'codebito'   => $codebito,
+            'cocadena'   => $cocadena,
+            'cousuario'  => $this->operador(),
+            'cofechacar' => date('Y-m-d'),
+            'cohoracar'  => date('H:i:s'),
+            'afilcont'   => 0,
+            'amotivo'    => '',
+            'cofuerapa'  => 1,
+        );
+        try {
+            $nro = (new AuditaFacturacion())->insertarFila($fila);
+            echo json_encode(array('ok' => true, 'nroorden' => $nro), JSON_UNESCAPED_UNICODE);
+        } catch (PDOException $e) {
+            $this->jsonError('Error al ajustar prestación afiliado: ' . $e->getMessage());
+        }
+        exit;
+    }
+
+    /**
+     * @return string
+     */
+    private function operador()
+    {
+        $u = isset($_SESSION['user']) ? $_SESSION['user'] : array();
+        if (isset($u['username']) && $u['username'] !== '') {
+            return strtoupper((string) $u['username']);
+        }
+        if (isset($u['nombre']) && $u['nombre'] !== '') {
+            return strtoupper((string) $u['nombre']);
+        }
+        return '';
     }
 
     /**

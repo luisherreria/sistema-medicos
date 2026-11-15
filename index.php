@@ -148,6 +148,10 @@ switch ($route) {
             case 'toggle_coselecc':  $controller->toggleCoselecc();  break;
             case 'do_form':          $controller->doForm();          break;
             case 'cierre':           $controller->cierre();          break;
+            case 'newcons':          $controller->guardarNewcons();  break;
+            case 'cambpres':         $controller->guardarCambpres(); break;
+            case 'ajusfact':         $controller->guardarAjusfact(); break;
+            case 'ajusfafi':         $controller->guardarAjusfafi(); break;
             default:                 $controller->index();           break;
         }
         break;

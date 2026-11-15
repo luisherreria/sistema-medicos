@@ -227,6 +227,8 @@ require_once __DIR__ . '/../../views/layouts/header.php';
     </div>
 </div>
 
+<?php require_once __DIR__ . '/dialogs.php'; ?>
+
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     'use strict';
@@ -512,11 +514,139 @@ document.addEventListener('DOMContentLoaded', function () {
                 showAlert('Acción VFP sin DO FORM citado en AUDITA.SCX — no migrada.', false);
                 return;
             }
+            if (form === 'newcons') { abrirNewcons(); return; }
+            if (form === 'cambpres') { abrirCambpres(); return; }
+            if (form === 'ajusfact') { abrirAjusfact(); return; }
+            if (form === 'ajusfafi') { abrirAjusfafi(); return; }
             postAccion('do_form', { form: form }).done(function (res) {
                 showAlert((res && res.error) || 'Form no migrado.', false);
             });
         }
     });
+
+    function filaActiva() {
+        var idx = parseInt($('#tbl-audita tbody tr.table-active').attr('data-idx'), 10);
+        if (isNaN(idx) || !filasCache[idx]) return null;
+        return filasCache[idx];
+    }
+
+    function abrirModal(id) {
+        var el = document.getElementById(id);
+        if (window.bootstrap && bootstrap.Modal) {
+            bootstrap.Modal.getOrCreateInstance(el).show();
+        }
+    }
+    function cerrarModal(id) {
+        var el = document.getElementById(id);
+        if (window.bootstrap && bootstrap.Modal) {
+            var inst = bootstrap.Modal.getInstance(el);
+            if (inst) inst.hide();
+        }
+    }
+
+    function abrirNewcons() {
+        var p = initParams();
+        $('#nc-tobra').val(p.obrasoc);
+        $('#nc-tpresta').val(p.prestador);
+        $('#nc-tsuc').val(p.suc);
+        $('#nc-tfac').val(p.factura);
+        $('#nc-tperi').val(p.periodo);
+        $('#nc-tcant').val(0);
+        $('#nc-tfact').val(0);
+        $('#nc-timpo').val(0);
+        $('#nc-tcose').val(0);
+        $('#nc-tcosep').val(0);
+        $('#nc-chkexccos').prop('checked', false);
+        $('#nc-err').addClass('d-none');
+        abrirModal('modal-newcons');
+    }
+
+    function abrirCambpres() {
+        var row = filaActiva();
+        if (!row) {
+            showAlert('Seleccione una fila (CAMBPRES).', false);
+            return;
+        }
+        $('#cp-nroorden').val(cell(row, 'nroorden'));
+        $('#cp-tpres').val(cell(row, 'cocodprest'));
+        $('#cp-prestant').val(cell(row, 'cocodprest'));
+        $('#cp-tnpres').val(cell(row, 'conombpres'));
+        $('#cp-tcant').val(cell(row, 'cocantpres'));
+        $('#cp-tfact').val(cell(row, 'cofacturad'));
+        $('#cp-timpo').val(cell(row, 'coimporte'));
+        $('#cp-tcose').val(cell(row, 'cocoseguro'));
+        $('#cp-tcospres').val(cell(row, 'cosegpres'));
+        $('#cp-chkexccos').prop('checked', truthy(cell(row, 'coexccos')));
+        $('#cp-todas').prop('checked', false);
+        $('#cp-ccanti').prop('checked', false);
+        $('#cp-err').addClass('d-none');
+        abrirModal('modal-cambpres');
+    }
+
+    function abrirAjusfact() {
+        var p = initParams();
+        $('#aj-tobra').val(p.obrasoc);
+        $('#aj-tpresta').val(p.prestador);
+        $('#aj-tsuc').val(p.suc);
+        $('#aj-tfac').val(p.factura);
+        $('#aj-tperi').val(p.periodo);
+        $('#aj-tafil').val('1');
+        $('#aj-tnomafil').val('Ajuste');
+        $('#aj-tcant').val(1);
+        $('#aj-tfact').val(0);
+        $('#aj-timpo').val(0);
+        $('#aj-tcose').val(0);
+        $('#aj-tcosepre').val(0);
+        $('#aj-err').addClass('d-none');
+        abrirModal('modal-ajusfact');
+    }
+
+    function abrirAjusfafi() {
+        var p = initParams();
+        var row = filaActiva();
+        $('#af2-tobra').val(p.obrasoc);
+        $('#af2-tpresta').val(p.prestador);
+        $('#af2-tsuc').val(p.suc);
+        $('#af2-tfac').val(p.factura);
+        $('#af2-tperi').val(p.periodo);
+        if (row) {
+            $('#af2-tafil').val(cell(row, 'coafiliado'));
+            $('#af2-tnomafil').val(cell(row, 'conompac'));
+            $('#af2-tplan').val(cell(row, 'coplan'));
+        }
+        $('#af2-tcant').val(1);
+        $('#af2-tfact').val(0);
+        $('#af2-timpo').val(0);
+        $('#af2-tcose').val(0);
+        $('#af2-tcosepre').val(0);
+        $('#af2-err').addClass('d-none');
+        abrirModal('modal-ajusfafi');
+    }
+
+    function bindForm(formId, action, errId, modalId) {
+        $('#' + formId).on('submit', function (e) {
+            e.preventDefault();
+            var data = {};
+            $(this).serializeArray().forEach(function (x) { data[x.name] = x.value; });
+            $('#' + formId + ' input[type=checkbox]').each(function () {
+                data[this.name] = this.checked ? 1 : 0;
+            });
+            postAccion(action, data).done(function (res) {
+                if (!res || !res.ok) {
+                    $('#' + errId).text((res && res.error) || 'No se pudo guardar.').removeClass('d-none');
+                    return;
+                }
+                cerrarModal(modalId);
+                cargar();
+            }).fail(function () {
+                $('#' + errId).text('Error de comunicación.').removeClass('d-none');
+            });
+        });
+    }
+    bindForm('form-newcons', 'newcons', 'nc-err', 'modal-newcons');
+    bindForm('form-cambpres', 'cambpres', 'cp-err', 'modal-cambpres');
+    bindForm('form-ajusfact', 'ajusfact', 'aj-err', 'modal-ajusfact');
+    bindForm('form-ajusfafi', 'ajusfafi', 'af2-err', 'modal-ajusfafi');
 
     cargar();
 });
