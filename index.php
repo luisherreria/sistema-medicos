@@ -13,6 +13,7 @@
  *   login   (GET)        → AuthController::showLogin()
  *   login   (POST)       → AuthController::login()
  *   logout               → AuthController::logout()
+ *   audit-facturacion    → AuditaFacturacionController (form AUDITA)
  * ─────────────────────────────────────────────────────────────────────────
  */
 
@@ -130,6 +131,24 @@ switch ($route) {
             case 'send':        $controller->sendMessage();    break;
             case 'saveContact': $controller->saveContact();    break;
             default:            $controller->index();          break;
+        }
+        break;
+
+    // ── Audit. Facturac. → Auditar Facturación (form AUDITA / audifac2) ──
+    case 'audit-facturacion':
+    case 'MNU_AF_AUDITAR':
+        requireController('AuditaFacturacionController.php');
+        $controller = new AuditaFacturacionController();
+        $action     = isset($_GET['action']) ? trim($_GET['action']) : '';
+        switch ($action) {
+            case 'listado':          $controller->listado();         break;
+            case 'recalc':           $controller->recalc();          break;
+            case 'marcar_todo':      $controller->marcarTodo();      break;
+            case 'marcar_todo_a':    $controller->marcarTodoA();     break;
+            case 'toggle_coselecc':  $controller->toggleCoselecc();  break;
+            case 'do_form':          $controller->doForm();          break;
+            case 'cierre':           $controller->cierre();          break;
+            default:                 $controller->index();           break;
         }
         break;
 
