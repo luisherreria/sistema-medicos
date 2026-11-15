@@ -45,6 +45,27 @@ $breadcrumb = isset($breadcrumb) ? $breadcrumb : array(
 require_once __DIR__ . '/../../models/Permission.php';
 require_once __DIR__ . '/../../views/layouts/header.php';
 ?>
+<style>
+.sf-grid-scroll {
+    max-height: min(62vh, calc(100vh - 240px));
+    overflow: auto;
+}
+#sf-grid {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+#sf-grid thead th {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    background: #2b579a;
+    color: #fff;
+    font-weight: 600;
+    white-space: nowrap;
+    vertical-align: middle;
+    box-shadow: 0 1px 0 #1e3f73;
+}
+</style>
 
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
     <div>
@@ -81,7 +102,7 @@ require_once __DIR__ . '/../../views/layouts/header.php';
                 <span class="small">Con Refacturacion</span>
             </div>
             <div class="card-body p-0">
-                <div class="table-responsive">
+                <div class="table-responsive sf-grid-scroll">
                     <table class="table table-hover table-sm mb-0" id="sf-grid">
                         <thead>
                             <tr>

@@ -138,6 +138,28 @@ require_once __DIR__ . '/../../views/layouts/header.php';
 <div id="af-alert" class="alert d-none mb-2 py-2" role="alert"></div>
 <div id="af-motivo" class="small text-muted mb-1"></div>
 
+<style>
+.af-grid-scroll {
+    max-height: min(62vh, calc(100vh - 280px));
+    overflow: auto;
+}
+#tbl-audita {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+#tbl-audita thead th {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    background: #2b579a;
+    color: #fff;
+    font-weight: 600;
+    white-space: nowrap;
+    vertical-align: middle;
+    box-shadow: 0 1px 0 #1e3f73;
+}
+</style>
+
 <div class="card card-module mb-2">
     <div class="card-header py-2">
         <span style="font-size:0.88rem;">
@@ -145,7 +167,7 @@ require_once __DIR__ . '/../../views/layouts/header.php';
         </span>
     </div>
     <div class="card-body p-2">
-        <div class="table-responsive">
+        <div class="table-responsive af-grid-scroll">
             <table id="tbl-audita" class="table table-hover table-bordered table-sm mb-0 nowrap" style="font-size:8pt;">
                 <thead>
                     <tr>
@@ -157,7 +179,7 @@ require_once __DIR__ . '/../../views/layouts/header.php';
                             $cls = !empty($col['hide']) ? ' d-none af-col-hidden' : '';
                             $chk2 = !empty($col['check2']) ? ' af-check2' : '';
                             $sort = isset($col['sort']) ? $col['sort'] : '';
-                            echo '<th class="' . trim($cls . $chk2) . '" data-field="' . audita_h($col['field']) . '" data-sort="' . audita_h($sort) . '" data-colid="' . audita_h($col['id']) . '">';
+                            echo '<th class="' . trim($cls . $chk2) . '" data-field="' . audita_h($col['field']) . '" data-sort="' . audita_h($sort) . '" data-colid="' . audita_h($col['id']) . '" title="' . audita_h($col['caption']) . '">';
                             echo audita_h($col['caption']);
                             echo '</th>';
                         }
