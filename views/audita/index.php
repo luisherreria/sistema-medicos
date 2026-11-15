@@ -160,17 +160,39 @@ require_once __DIR__ . '/../../views/layouts/header.php';
     vertical-align: middle;
     box-shadow: 0 1px 0 #1e3f73;
 }
+#tbl-audita tbody td {
+    border-bottom: 1px solid #9aa8bc;
+    vertical-align: middle;
+}
+#tbl-audita tbody tr.table-active td {
+    background: #d6e4f7;
+}
+.af-grid-search {
+    min-width: 240px;
+    max-width: 360px;
+}
+.card-module .card-header .af-grid-search input {
+    background: #fff;
+    color: #212529;
+}
 </style>
 
 <div class="card card-module mb-2">
-    <div class="card-header py-2">
+    <div class="card-header py-2 d-flex align-items-center justify-content-between flex-wrap gap-2">
         <span style="font-size:0.88rem;">
             <i class="fa-solid fa-table me-2"></i>Grid1 — audifac2
         </span>
+        <div class="gss-search-wrap af-grid-search">
+            <i class="fa-solid fa-magnifying-glass text-white-50"></i>
+            <input type="search" id="af-grid-buscar" class="form-control form-control-sm"
+                   placeholder="Buscar en cualquier fila..." autocomplete="off">
+        </div>
     </div>
     <div class="card-body p-2">
         <div class="table-responsive af-grid-scroll">
-            <table id="tbl-audita" class="table table-hover table-bordered table-sm mb-0 nowrap" style="font-size:8pt;">
+            <table id="tbl-audita" class="table table-hover table-sm mb-0 nowrap grid-sort-search"
+                   data-gss-search="#af-grid-buscar" data-gss-badge="#af-total-badge"
+                   style="font-size:8pt;">
                 <thead>
                     <tr>
                         <?php
@@ -180,9 +202,12 @@ require_once __DIR__ . '/../../views/layouts/header.php';
                             $col = $columnas[$ci];
                             $cls = !empty($col['hide']) ? ' d-none af-col-hidden' : '';
                             $chk2 = !empty($col['check2']) ? ' af-check2' : '';
-                            $sort = isset($col['sort']) ? $col['sort'] : '';
-                            echo '<th class="' . trim($cls . $chk2) . '" data-field="' . audita_h($col['field']) . '" data-sort="' . audita_h($sort) . '" data-colid="' . audita_h($col['id']) . '" title="' . audita_h($col['caption']) . '">';
+                            $sort = isset($col['sort']) && $col['sort'] !== ''
+                                ? $col['sort']
+                                : (isset($col['field']) ? $col['field'] : '');
+                            echo '<th class="gss-sortable ' . trim($cls . $chk2) . '" data-field="' . audita_h($col['field']) . '" data-sort="' . audita_h($sort) . '" data-colid="' . audita_h($col['id']) . '" title="' . audita_h($col['caption']) . '">';
                             echo audita_h($col['caption']);
+                            echo '<span class="gss-tri" aria-hidden="true"></span>';
                             echo '</th>';
                         }
                         ?>
@@ -357,6 +382,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 chk2 = col.check2 ? ' af-check2' : '';
                 td.className = (hideCls + chk2).trim();
                 val = cell(row, col.field);
+                td.setAttribute('data-sort-val', val === null || val === undefined ? '' : String(val));
                 if (col.check) {
                     td.innerHTML = truthy(val) ? '<i class="fa-solid fa-check"></i>' : '';
                     td.className += ' text-center';
@@ -376,6 +402,9 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('af-total-badge').innerHTML =
             '<i class="fa-solid fa-list-ol me-1"></i>' + filasCache.length + ' filas';
         aplicarCheck2();
+        if (window.GridSortSearch) {
+            window.GridSortSearch.enhance(document.getElementById('tbl-audita'));
+        }
     }
 
     function aplicarCheck2() {
@@ -464,18 +493,6 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('af-motivo').textContent = cell(filasCache[idx], 'amotivo') || '';
         $('#tbl-audita tbody tr').removeClass('table-active');
         $(this).addClass('table-active');
-    });
-
-    $('#tbl-audita thead').on('click', 'th', function () {
-        var sort = $(this).attr('data-sort');
-        if (!sort) return;
-        if (ordenActual === sort) {
-            dirActual = dirActual === 'ASC' ? 'DESC' : 'ASC';
-        } else {
-            ordenActual = sort;
-            dirActual = 'ASC';
-        }
-        cargar();
     });
 
     $('#Check2').on('change', function () {
@@ -569,9 +586,25 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
         if (acc === 'orden') {
-            ordenActual = ord || 'nroorden';
-            dirActual = 'ASC';
-            cargar();
+            var campo = ord || 'nroorden';
+            filasCache.sort(function (a, b) {
+                var va = parseFloat(cell(a, campo));
+                var vb = parseFloat(cell(b, campo));
+                if (isNaN(va) && isNaN(vb)) {
+                    var sa = String(cell(a, campo) || '').toLowerCase();
+                    var sb = String(cell(b, campo) || '').toLowerCase();
+                    if (sa < sb) return -1;
+                    if (sa > sb) return 1;
+                    return 0;
+                }
+                if (isNaN(va)) return 1;
+                if (isNaN(vb)) return -1;
+                return va - vb;
+            });
+            if (window.GridSortSearch) {
+                window.GridSortSearch.clearSort(document.getElementById('tbl-audita'));
+            }
+            pintarFilas(filasCache);
             return;
         }
         if (acc === 'cierre') {

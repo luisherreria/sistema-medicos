@@ -29,6 +29,8 @@
 <script src="/sistema-medicos/public/js/grid-helper.js"></script>
 <!-- Periodo YY/MM: la barra se inserta sola -->
 <script src="/sistema-medicos/public/js/periodo-yymm.js"></script>
+<!-- Orden ASC/DESC + buscar en grillas -->
+<script src="/sistema-medicos/public/js/grid-sort-search.js"></script>
 
 <style>
     /* ── Reloj flotante ─────────────────────────────────────────────────── */

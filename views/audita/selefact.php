@@ -78,6 +78,9 @@ require_once __DIR__ . '/../../views/layouts/header.php';
     vertical-align: middle;
     box-shadow: 0 1px 0 #1e3f73;
 }
+#sf-grid tbody td {
+    border-bottom: 1px solid #9aa8bc;
+}
 </style>
 
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
@@ -110,13 +113,20 @@ require_once __DIR__ . '/../../views/layouts/header.php';
 <div class="row g-3">
     <div class="col-lg-9">
         <div class="card border-0 shadow-sm" style="border-radius:10px;">
-            <div class="card-header py-2 text-white d-flex justify-content-between" style="background:#2b579a;">
+            <div class="card-header py-2 text-white d-flex justify-content-between align-items-center flex-wrap gap-2" style="background:#2b579a;">
                 <span class="small fw-semibold">Grid1 — <?= audita_h($tablaUsada) ?> (<?= (int) count($facturas) ?>)</span>
-                <span class="small">Con Refacturacion</span>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="small">Con Refacturacion</span>
+                    <div class="gss-search-wrap">
+                        <input type="search" id="sf-grid-buscar" class="form-control form-control-sm"
+                               placeholder="Buscar en cualquier fila..." autocomplete="off">
+                    </div>
+                </div>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive sf-grid-scroll">
-                    <table class="table table-hover table-sm mb-0" id="sf-grid">
+                    <table class="table table-hover table-sm mb-0 grid-sort-search" id="sf-grid"
+                           data-gss-search="#sf-grid-buscar">
                         <thead>
                             <tr>
                                 <th>Periodo</th>

@@ -48,12 +48,17 @@ require_once __DIR__ . '/../../views/layouts/header.php';
     </div>
 <?php } else { ?>
 <div class="card border-0 shadow-sm" style="border-radius:10px;">
-    <div class="card-header py-2 text-white" style="background:#2b579a;">
+    <div class="card-header py-2 text-white d-flex justify-content-between align-items-center flex-wrap gap-2" style="background:#2b579a;">
         <span class="small fw-semibold">Facturas a auditar (<?= (int) count($facturas) ?>)</span>
+        <div class="gss-search-wrap">
+            <input type="search" id="sel-grid-buscar" class="form-control form-control-sm"
+                   placeholder="Buscar en cualquier fila..." autocomplete="off">
+        </div>
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover table-sm mb-0">
+            <table class="table table-hover table-sm mb-0 grid-sort-search" id="sel-grid"
+                   data-gss-search="#sel-grid-buscar">
                 <thead>
                     <tr>
                         <th>Prestador</th>
@@ -62,7 +67,7 @@ require_once __DIR__ . '/../../views/layouts/header.php';
                         <th>Suc</th>
                         <th>Factura</th>
                         <th>Periodo</th>
-                        <th></th>
+                        <th class="gss-skip"></th>
                     </tr>
                 </thead>
                 <tbody>
