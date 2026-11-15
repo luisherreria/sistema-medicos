@@ -617,7 +617,6 @@ class AuditaFacturacionController
         if ($errorTabla === '') {
             $errorTabla = $model->ultimoError();
         }
-        $verCierre = ($this->operador() === 'DIEG' || $this->operador() === 'LUIS');
         require_once __DIR__ . '/../views/audita/selefact.php';
     }
 

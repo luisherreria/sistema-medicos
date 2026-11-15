@@ -36,7 +36,6 @@ $periodo    = isset($periodo) ? $periodo : '';
 $nombre     = isset($nombre) ? $nombre : '';
 $tconfact   = isset($tconfact) ? $tconfact : '';
 $infoliq    = isset($infoliq) ? $infoliq : '';
-$verCierre  = !empty($verCierre);
 $pageTitle  = isset($pageTitle) ? $pageTitle : 'COMEDICA — Facturas a Auditar prestador';
 $breadcrumb = isset($breadcrumb) ? $breadcrumb : array(
     array('label' => 'Audit. Facturac.'),
@@ -168,11 +167,6 @@ require_once __DIR__ . '/../../views/layouts/header.php';
                 <textarea class="form-control form-control-sm" rows="6" readonly><?= audita_h($infoliq) ?></textarea>
             </div>
         </div>
-        <?php if ($verCierre) { ?>
-            <button type="button" id="sf-verif" class="btn btn-sm btn-outline-primary w-100 mb-2">Verificar cierre automatico</button>
-            <button type="button" id="sf-cierre" class="btn btn-sm btn-outline-secondary w-100 mb-2 d-none">Confirme cierre Automatico</button>
-            <div id="sf-cierre-msg" class="small text-danger d-none">Debe revisar la factura tiene mucha diferencia.</div>
-        <?php } ?>
     </div>
 </div>
 <?php } ?>
@@ -209,10 +203,6 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
         abrirFila(sel);
-    });
-
-    $('#sf-verif, #sf-cierre').on('click', function () {
-        $('#sf-alert').removeClass('d-none').text('Cierre automático no migrado (consulta/detalle/DETCLOSE).');
     });
 
     var $loc = $('#sf-grid tbody tr.sf-row[data-match="1"]').first();
