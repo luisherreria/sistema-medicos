@@ -37,8 +37,8 @@ class AuditaFacturacion
     }
 
     /**
-     * audifac2 es el alias VFP (USE c:\bases\AUDIFAC2). En MySQL el nombre puede
-     * ser audifact / audif2 / detalle si el importador usó el DBF original.
+     * audifac2 es work VFP (COPY detalle → c:\bases\AUDIFAC2). En vfpcomedica
+     * audifac2 tiene 0 filas y detalle.DBF no está: se lee consulta/audifact.
      *
      * @return string
      */
@@ -49,7 +49,7 @@ class AuditaFacturacion
         }
         $this->tablaReal = '';
         $this->tablaError = '';
-        $candidatos = array('audifac2', 'audifact', 'audifac', 'audif2', 'detalle', 'detconsu');
+        $candidatos = array('audifac2', 'detalle', 'consulta', 'audifact', 'audif2', 'detconsu');
         $mejor = '';
         $mejorHits = 0;
         $revisadas = array();
@@ -62,7 +62,11 @@ class AuditaFacturacion
             }
             $cols = $this->columnasDeTabla($fis);
             $hits = $this->cuentaCamposAudita($cols);
-            $revisadas[] = $fis . ' (' . $hits . ' campos de AUDITA)';
+            $filas = $this->tablaTieneFilas($fis);
+            $revisadas[] = $fis . ' (' . $hits . ' campos' . ($filas ? '' : ', 0 filas') . ')';
+            if (!$filas) {
+                continue;
+            }
             if ($hits >= 5) {
                 $this->tablaReal = $fis;
                 $this->tablaError = '';
@@ -78,7 +82,7 @@ class AuditaFacturacion
             $this->tablaError = '';
             return $this->tablaReal;
         }
-        $this->tablaError = 'No está audifac2 en vfpmedicos/cartilla/vfpcomedica (VFP: c:\\bases\\AUDIFAC2).';
+        $this->tablaError = 'No hay filas de auditoría en vfpcomedica (audifac2 vacío, detalle.DBF ausente).';
         if (!empty($revisadas)) {
             $this->tablaError .= ' Revisadas: ' . implode(', ', $revisadas) . '.';
         }
@@ -1163,6 +1167,9 @@ class AuditaFacturacion
                 continue;
             }
             $ultimo = $fis;
+            if (!$this->tablaTieneFilas($fis)) {
+                continue;
+            }
             $cols = $this->columnasDeTabla($fis);
             $cPre = $this->colEn($cols, 'coprestado');
             $cOs  = $this->colEn($cols, 'coobrasoc');
@@ -1211,6 +1218,9 @@ class AuditaFacturacion
                 $this->tablaError = $e->getMessage();
                 continue;
             }
+            if (empty($filas)) {
+                continue;
+            }
             return array(
                 'filas'    => $filas,
                 'tabla_ok' => true,
@@ -1226,17 +1236,35 @@ class AuditaFacturacion
     }
 
     /**
-     * @param  string $nombre
-     * @return string
-     */
-    /**
-     * Login sigue en vfpmedicos. Las DBF Fox pueden estar en cartilla o vfpcomedica.
+     * Login sigue en vfpmedicos. Sandbox DBF = vfpcomedica (prioridad).
      *
      * @return string[]
      */
     private function schemasFox()
     {
-        return array('', 'cartilla', 'vfpcomedica');
+        return array('vfpcomedica', '', 'cartilla');
+    }
+
+    /**
+     * @param  string $nombre calificado
+     * @return bool
+     */
+    private function tablaTieneFilas($nombre)
+    {
+        $ident = $this->sqlIdent($nombre);
+        if ($ident === '') {
+            return false;
+        }
+        try {
+            $stmt = $this->db->query('SELECT 1 FROM ' . $ident . ' LIMIT 1');
+        } catch (PDOException $e) {
+            return false;
+        }
+        if (!$stmt) {
+            return false;
+        }
+        $row = $stmt->fetch(PDO::FETCH_NUM);
+        return ($row !== false && $row !== null);
     }
 
     /**
