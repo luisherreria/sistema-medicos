@@ -134,7 +134,14 @@ class AuditaFacturacionController
         if ($form === '' || !isset($mapa[$form])) {
             $this->jsonError('Formulario no citado en AUDITA.SCX.');
         }
-        $abiertos = array('newcons' => 1, 'cambpres' => 1, 'ajusfact' => 1, 'ajusfafi' => 1);
+        $abiertos = array(
+            'newcons'  => 1,
+            'cambpres' => 1,
+            'ajusfact' => 1,
+            'ajusfafi' => 1,
+            'cambafil' => 1,
+            'debitar'  => 1,
+        );
         if (isset($abiertos[$form])) {
             echo json_encode(array(
                 'ok'   => true,
@@ -457,6 +464,72 @@ class AuditaFacturacionController
             echo json_encode(array('ok' => true, 'nroorden' => $nro), JSON_UNESCAPED_UNICODE);
         } catch (PDOException $e) {
             $this->jsonError('Error al ajustar prestación afiliado: ' . $e->getMessage());
+        }
+        exit;
+    }
+
+    /**
+     * CAMBAFIL.Command1 — misma OS REPLACE audifac2 FOR CONUMERO.
+     * Sin consulta/detalle. OSPETEL y cambio de OS no migrados.
+     */
+    public function guardarCambafil()
+    {
+        $this->requireModulo();
+        $this->requireCsrf();
+        header('Content-Type: application/json; charset=utf-8');
+        $tobra = strtoupper(trim(isset($_POST['tobra']) ? (string) $_POST['tobra'] : ''));
+        $nobra = strtoupper(trim(isset($_POST['nobra']) ? (string) $_POST['nobra'] : ''));
+        $tafil = trim(isset($_POST['tafil']) ? (string) $_POST['tafil'] : '');
+        $tnomafil = trim(isset($_POST['tnomafil']) ? (string) $_POST['tnomafil'] : '');
+        $nplan = trim(isset($_POST['nplan']) ? (string) $_POST['nplan'] : '');
+        $conumero = trim(isset($_POST['conumero']) ? (string) $_POST['conumero'] : '');
+        if ($tobra === 'OSPETEL' || $nobra === 'OSPETEL') {
+            $this->jsonError('EL CAMPO OBRA SOCIAL NO PUEDE SER OSPETEL - CAMBAFIL - AVISAR A SISTEMAS');
+        }
+        if ($tobra !== $nobra) {
+            $this->jsonError('Cambio de obra social no migrado (consulta/detalle omitidos).');
+        }
+        if ($conumero === '') {
+            $this->jsonError('CONUMERO vacío (CAMBAFIL.Command1 FOR CONUMERO).');
+        }
+        $campos = array(
+            'coafiliado' => $tafil,
+            'conompac'   => $tnomafil,
+            'coplan'     => $nplan,
+            'cofuerapa'  => 0,
+        );
+        try {
+            $n = (new AuditaFacturacion())->cambiarAfiliado($conumero, $campos);
+            echo json_encode(array('ok' => true, 'filas' => $n), JSON_UNESCAPED_UNICODE);
+        } catch (PDOException $e) {
+            $this->jsonError('Error al cambiar afiliado: ' . $e->getMessage());
+        }
+        exit;
+    }
+
+    /**
+     * AUDITA.Command8 + DEBITAR.Command1: REPLACE codebito/coleyedeb/cocadena/conomdebi.
+     * pideleyd no migrado: se usa tleye del form DEBITAR.
+     */
+    public function guardarDebitar()
+    {
+        $this->requireModulo();
+        $this->requireCsrf();
+        header('Content-Type: application/json; charset=utf-8');
+        $nro = isset($_POST['nroorden']) ? (int) $_POST['nroorden'] : 0;
+        $tdebi = strtoupper(trim(isset($_POST['debito']) ? (string) $_POST['debito'] : ''));
+        $tleye = trim(isset($_POST['tleye']) ? (string) $_POST['tleye'] : '');
+        if ($nro < 1) {
+            $this->jsonError('Seleccione una fila (DEBITAR).');
+        }
+        if (strlen($tdebi) < 2) {
+            $this->jsonError('Ingrese un valor correcto');
+        }
+        try {
+            $n = (new AuditaFacturacion())->debitarFila($nro, $tdebi, $tleye);
+            echo json_encode(array('ok' => true, 'filas' => $n), JSON_UNESCAPED_UNICODE);
+        } catch (PDOException $e) {
+            $this->jsonError('Error al debitar: ' . $e->getMessage());
         }
         exit;
     }

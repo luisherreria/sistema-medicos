@@ -80,6 +80,7 @@ class AuditaFacturacion
             'cofechacar',
             'cohoracar',
             'cocateg',
+            'conomdebi',
         );
     }
 
@@ -513,6 +514,84 @@ class AuditaFacturacion
             $n += $st2->rowCount();
         }
         return $n;
+    }
+
+    /**
+     * CAMBAFIL.Command1 misma OS: REPLACE audifac2 FOR CONUMERO.
+     * Sin consulta/detalle. El cambio de OS (DELE audifac2) no se ejecuta aquí.
+     *
+     * @param  string $conumero
+     * @param  array  $campos coafiliado, conompac, coplan, cofuerapa
+     * @return int
+     */
+    public function cambiarAfiliado($conumero, array $campos)
+    {
+        $reales = $this->columnasReales();
+        if ($this->colReal('conumero', $reales) === null || $conumero === '') {
+            return 0;
+        }
+        $set = array();
+        $params = array(':c' => $conumero);
+        foreach ($campos as $k => $v) {
+            $real = $this->colReal($k, $reales);
+            if ($real === null) {
+                continue;
+            }
+            $set[] = '`' . $real . '` = :' . $real;
+            $params[':' . $real] = $v;
+        }
+        if (empty($set)) {
+            return 0;
+        }
+        $sql = 'UPDATE `' . self::TABLA . '` SET ' . implode(',', $set) . ' WHERE `conumero` = :c';
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->rowCount();
+    }
+
+    /**
+     * AUDITA.Command8 después de DEBITAR: REPLACE codebito / coleyedeb / cocadena / conomdebi.
+     *
+     * @param  int    $nroorden
+     * @param  string $tdebi
+     * @param  string $tleyenda
+     * @return int
+     */
+    public function debitarFila($nroorden, $tdebi, $tleyenda)
+    {
+        $reales = $this->columnasReales();
+        if ($this->colReal('nroorden', $reales) === null) {
+            return 0;
+        }
+        $tdebi = trim($tdebi);
+        $tleyenda = trim($tleyenda);
+        $tnomdeb = $tleyenda;
+        $cocadena = ($tdebi === '032') ? 'DIFERENCIA DE IMPORTE' : $tnomdeb;
+        $coleyedeb = ($tdebi === '032') ? ($tleyenda . '. CREDITO A FAVOR X COSEGURO') : $tleyenda;
+        $campos = array(
+            'codebito'  => $tdebi,
+            'cocadena'  => $cocadena,
+            'coleyedeb' => $coleyedeb,
+            'conomdebi' => $tleyenda,
+        );
+        $set = array();
+        $params = array(':nro' => (int) $nroorden);
+        foreach ($campos as $k => $v) {
+            $real = $this->colReal($k, $reales);
+            if ($real === null) {
+                continue;
+            }
+            $set[] = '`' . $real . '` = :' . $real;
+            $params[':' . $real] = $v;
+        }
+        if (empty($set)) {
+            return 0;
+        }
+        $sql = 'UPDATE `' . self::TABLA . '` SET ' . implode(',', $set)
+            . ' WHERE `nroorden` = :nro LIMIT 1';
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->rowCount();
     }
 
     /**

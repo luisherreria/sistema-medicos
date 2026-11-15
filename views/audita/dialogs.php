@@ -1,7 +1,7 @@
 <?php
 /**
  * Diálogos VFP citados por AUDITA.DO FORM (extractos SCX).
- * newcons, cambpres, AJUSFACT, AJUSFAFI.
+ * newcons, cambpres, AJUSFACT, AJUSFAFI, CAMBAFIL, debitar.
  */
 if (!function_exists('audita_h')) {
     function audita_h($s)
@@ -212,6 +212,76 @@ if (!function_exists('audita_h')) {
                     <input type="hidden" name="tfac" id="af2-tfac">
                     <input type="hidden" name="tperi" id="af2-tperi">
                     <div id="af2-err" class="alert alert-danger py-1 mt-2 d-none small"></div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="submit" class="btn btn-sm btn-primary">Aceptar</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modal-cambafil" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:555px;">
+        <div class="modal-content">
+            <form id="form-cambafil">
+                <div class="modal-header py-2 text-white" style="background:#2b579a;">
+                    <h6 class="modal-title mb-0">Cambio de Afiliado de Obra Social</h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-2">
+                        <div class="col-md-3"><label class="small">Obra Social :</label>
+                            <input class="form-control form-control-sm text-uppercase" name="tobra" id="ca-tobra" maxlength="8"></div>
+                        <div class="col-md-9"><label class="small">&nbsp;</label>
+                            <input class="form-control form-control-sm" name="tnomobra" id="ca-tnomobra" readonly></div>
+                        <div class="col-md-3"><label class="small">Afiliado:</label>
+                            <input class="form-control form-control-sm" name="tafil" id="ca-tafil"></div>
+                        <div class="col-md-9"><label class="small">&nbsp;</label>
+                            <input class="form-control form-control-sm" name="tnomafil" id="ca-tnomafil" readonly></div>
+                    </div>
+                    <input type="hidden" name="nobra" id="ca-nobra">
+                    <input type="hidden" name="nafil" id="ca-nafil">
+                    <input type="hidden" name="nplan" id="ca-nplan">
+                    <input type="hidden" name="tfecha" id="ca-tfecha">
+                    <input type="hidden" name="conumero" id="ca-conumero">
+                    <div id="ca-err" class="alert alert-danger py-1 mt-2 d-none small"></div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="submit" class="btn btn-sm btn-primary">Acepta</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancela</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modal-debitar" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg modal-dialog-centered" style="max-width:631px;">
+        <div class="modal-content">
+            <form id="form-debitar">
+                <div class="modal-header py-2 text-white" style="background:#2b579a;">
+                    <h6 class="modal-title mb-0">Seleccione el Codigo de Debito</h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-2">
+                        <div class="col-md-3"><label class="small">Prestador :</label></div>
+                        <div class="col-md-9">
+                            <input class="form-control form-control-sm" name="prestador" id="db-prestador" readonly></div>
+                        <div class="col-md-3"><label class="small">Prestacion :</label></div>
+                        <div class="col-md-9">
+                            <input class="form-control form-control-sm" name="prestacion" id="db-prestacion" readonly></div>
+                        <div class="col-md-3"><label class="small">Cod. Debito :</label></div>
+                        <div class="col-md-3">
+                            <input class="form-control form-control-sm text-uppercase" name="debito" id="db-debito" maxlength="8"></div>
+                        <div class="col-12"><label class="small">Leyenda :</label>
+                            <input class="form-control form-control-sm" name="tleye" id="db-tleye"></div>
+                    </div>
+                    <input type="hidden" name="nroorden" id="db-nroorden">
+                    <input type="hidden" name="problema" id="db-problema">
+                    <div id="db-err" class="alert alert-danger py-1 mt-2 d-none small"></div>
                 </div>
                 <div class="modal-footer py-2">
                     <button type="submit" class="btn btn-sm btn-primary">Aceptar</button>

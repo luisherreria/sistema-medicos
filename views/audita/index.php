@@ -518,6 +518,8 @@ document.addEventListener('DOMContentLoaded', function () {
             if (form === 'cambpres') { abrirCambpres(); return; }
             if (form === 'ajusfact') { abrirAjusfact(); return; }
             if (form === 'ajusfafi') { abrirAjusfafi(); return; }
+            if (form === 'cambafil') { abrirCambafil(); return; }
+            if (form === 'debitar') { abrirDebitar(); return; }
             postAccion('do_form', { form: form }).done(function (res) {
                 showAlert((res && res.error) || 'Form no migrado.', false);
             });
@@ -623,6 +625,41 @@ document.addEventListener('DOMContentLoaded', function () {
         abrirModal('modal-ajusfafi');
     }
 
+    function abrirCambafil() {
+        var row = filaActiva();
+        if (!row) {
+            showAlert('Seleccione una fila (CAMBAFIL).', false);
+            return;
+        }
+        $('#ca-tobra').val(cell(row, 'coobrasoc'));
+        $('#ca-nobra').val(cell(row, 'coobrasoc'));
+        $('#ca-tafil').val(cell(row, 'coafiliado'));
+        $('#ca-nafil').val(cell(row, 'coafiliado'));
+        $('#ca-tnomafil').val(cell(row, 'conompac'));
+        $('#ca-nplan').val(cell(row, 'coplan'));
+        $('#ca-tfecha').val(cell(row, 'cofeccons'));
+        $('#ca-conumero').val(cell(row, 'conumero'));
+        $('#ca-tnomobra').val('');
+        $('#ca-err').addClass('d-none');
+        abrirModal('modal-cambafil');
+    }
+
+    function abrirDebitar() {
+        var row = filaActiva();
+        if (!row) {
+            showAlert('Seleccione una fila (DEBITAR).', false);
+            return;
+        }
+        $('#db-nroorden').val(cell(row, 'nroorden'));
+        $('#db-prestador').val(cell(row, 'conomprest'));
+        $('#db-prestacion').val(cell(row, 'conombpres'));
+        $('#db-problema').val('');
+        $('#db-debito').val('');
+        $('#db-tleye').val('');
+        $('#db-err').addClass('d-none');
+        abrirModal('modal-debitar');
+    }
+
     function bindForm(formId, action, errId, modalId) {
         $('#' + formId).on('submit', function (e) {
             e.preventDefault();
@@ -647,6 +684,8 @@ document.addEventListener('DOMContentLoaded', function () {
     bindForm('form-cambpres', 'cambpres', 'cp-err', 'modal-cambpres');
     bindForm('form-ajusfact', 'ajusfact', 'aj-err', 'modal-ajusfact');
     bindForm('form-ajusfafi', 'ajusfafi', 'af2-err', 'modal-ajusfafi');
+    bindForm('form-cambafil', 'cambafil', 'ca-err', 'modal-cambafil');
+    bindForm('form-debitar', 'debitar', 'db-err', 'modal-debitar');
 
     cargar();
 });

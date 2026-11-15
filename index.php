@@ -14,6 +14,11 @@
  *   login   (POST)       → AuthController::login()
  *   logout               → AuthController::logout()
  *   audit-facturacion    → AuditaFacturacionController (form AUDITA)
+ *   cierre-automatico    → AuditPadController (autscerr)
+ *   liq-auditar          → AuditPadController (liqaaud)
+ *   liq-sin-cerrar       → AuditPadController (LIQSCERR)
+ *   reimp-liquidaciones  → AuditPadController (reaudifact)
+ *   envio-debitos        → AuditPadController (avideb)
  * ─────────────────────────────────────────────────────────────────────────
  */
 
@@ -152,7 +157,29 @@ switch ($route) {
             case 'cambpres':         $controller->guardarCambpres(); break;
             case 'ajusfact':         $controller->guardarAjusfact(); break;
             case 'ajusfafi':         $controller->guardarAjusfafi(); break;
+            case 'cambafil':         $controller->guardarCambafil(); break;
+            case 'debitar':          $controller->guardarDebitar();  break;
             default:                 $controller->index();           break;
+        }
+        break;
+
+    // ── Audit. Facturac. pad (autscerr / liqaaud / LIQSCERR / reaudifact / avideb)
+    case 'cierre-automatico':
+    case 'MNU_AF_CIERRE_AUTO':
+    case 'liq-auditar':
+    case 'MNU_AF_LIQ_AUDITAR':
+    case 'liq-sin-cerrar':
+    case 'MNU_AF_LIQ_SIN_CERRAR':
+    case 'reimp-liquidaciones':
+    case 'MNU_AF_REIMP_LIQ':
+    case 'envio-debitos':
+    case 'MNU_AF_ENV_DEBITO':
+        requireController('AuditPadController.php');
+        $controller = new AuditPadController();
+        $action     = isset($_GET['action']) ? trim($_GET['action']) : '';
+        switch ($action) {
+            case 'accion': $controller->accion(); break;
+            default:       $controller->index();  break;
         }
         break;
 
