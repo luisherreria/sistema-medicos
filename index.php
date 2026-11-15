@@ -27,6 +27,27 @@ ini_set('display_errors', '1');
 ini_set('display_startup_errors', '1');
 error_reporting(E_ALL);
 
+if (!function_exists('hash_equals')) {
+    function hash_equals($known, $user)
+    {
+        $known = (string) $known;
+        $user  = (string) $user;
+        if (strlen($known) !== strlen($user)) {
+            return false;
+        }
+        $res = 0;
+        $i = 0;
+        $n = strlen($known);
+        for ($i = 0; $i < $n; $i++) {
+            $res |= ord($known[$i]) ^ ord($user[$i]);
+        }
+        return $res === 0;
+    }
+}
+if (!defined('JSON_UNESCAPED_UNICODE')) {
+    define('JSON_UNESCAPED_UNICODE', 0);
+}
+
 // ── 2. Sesión segura ─────────────────────────────────────────────────────
 ini_set('session.cookie_httponly', '1');
 ini_set('session.use_strict_mode', '1');
@@ -49,14 +70,30 @@ $route  = isset($_GET['route']) ? trim($_GET['route']) : '';
 $method = isset($_SERVER['REQUEST_METHOD']) ? strtoupper($_SERVER['REQUEST_METHOD']) : 'GET';
 
 $routeAliases = array(
-    'mnu_aud_auditar'     => 'audit-facturacion',
-    'mnu-aud-auditar'     => 'audit-facturacion',
-    'mnu_af_auditar'      => 'audit-facturacion',
-    'mnu-af-auditar'      => 'audit-facturacion',
-    'MNU_AUD_AUDITAR'     => 'audit-facturacion',
-    'MNU_AF_AUDITAR'      => 'audit-facturacion',
-    'auditar-facturacion' => 'audit-facturacion',
-    'audita'              => 'audit-facturacion',
+    'mnu_aud_auditar'        => 'audit-facturacion',
+    'mnu-aud-auditar'        => 'audit-facturacion',
+    'mnu_af_auditar'         => 'audit-facturacion',
+    'mnu-af-auditar'         => 'audit-facturacion',
+    'MNU_AUD_AUDITAR'        => 'audit-facturacion',
+    'MNU_AF_AUDITAR'         => 'audit-facturacion',
+    'auditar-facturacion'    => 'audit-facturacion',
+    'audita'                 => 'audit-facturacion',
+    'mnu-af-cierre-auto'     => 'cierre-automatico',
+    'mnu_af_cierre_auto'     => 'cierre-automatico',
+    'MNU_AF_CIERRE_AUTO'     => 'cierre-automatico',
+    'cierre-automatico'      => 'cierre-automatico',
+    'mnu-af-liq-auditar'     => 'liq-auditar',
+    'mnu_af_liq_auditar'     => 'liq-auditar',
+    'MNU_AF_LIQ_AUDITAR'     => 'liq-auditar',
+    'mnu-af-liq-sin-cerrar'  => 'liq-sin-cerrar',
+    'mnu_af_liq_sin_cerrar'  => 'liq-sin-cerrar',
+    'MNU_AF_LIQ_SIN_CERRAR'  => 'liq-sin-cerrar',
+    'mnu-af-reimp-liq'       => 'reimp-liquidaciones',
+    'mnu_af_reimp_liq'       => 'reimp-liquidaciones',
+    'MNU_AF_REIMP_LIQ'       => 'reimp-liquidaciones',
+    'mnu-af-env-debito'      => 'envio-debitos',
+    'mnu_af_env_debito'      => 'envio-debitos',
+    'MNU_AF_ENV_DEBITO'      => 'envio-debitos',
 );
 if (isset($routeAliases[$route])) {
     $route = $routeAliases[$route];

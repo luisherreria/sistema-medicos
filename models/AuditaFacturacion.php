@@ -175,18 +175,69 @@ class AuditaFacturacion
             $orderSql = ' ORDER BY `nroorden` ASC';
         }
 
-        $sql  = 'SELECT `' . implode('`,`', $selectCols) . '` FROM `' . self::TABLA . '`' . $where . $orderSql;
+        $sql  = 'SELECT `' . implode('`,`', $selectCols) . '` FROM `' . self::TABLA . '`' . $where . $orderSql
+            . ' LIMIT 4001';
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         $filas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $truncado = count($filas) > 4000;
+        if ($truncado) {
+            $filas = array_slice($filas, 0, 4000);
+        }
         $filas = $this->anexarDifcpre($filas);
 
         return array(
             'filas'     => $filas,
             'totales'   => $this->totalesDeFilas($filas, $reales),
             'tabla_ok'  => true,
+            'truncado'  => $truncado,
             'columnas'  => $selectCols,
         );
+    }
+
+    /**
+     * Selector de facturas (menú sin Init): GROUP BY campos de AUDITA.Init.
+     * Sustituye AUDIFACT.SCX, que no está en este corte.
+     *
+     * @return array {filas, tabla_ok}
+     */
+    public function listarFacturas()
+    {
+        $reales = $this->columnasReales();
+        if (empty($reales)) {
+            return array('filas' => array(), 'tabla_ok' => false);
+        }
+        $grupo = array('coprestado', 'coobrasoc', 'cosucfac', 'conrofac', 'coperiodo');
+        $gCols = array();
+        $g = 0;
+        for ($g = 0; $g < 5; $g++) {
+            $real = $this->colReal($grupo[$g], $reales);
+            if ($real !== null) {
+                $gCols[] = $real;
+            }
+        }
+        if (empty($gCols)) {
+            return array('filas' => array(), 'tabla_ok' => true);
+        }
+        $select = array();
+        $i = 0;
+        $n = count($gCols);
+        for ($i = 0; $i < $n; $i++) {
+            $select[] = '`' . $gCols[$i] . '`';
+        }
+        $nom = $this->colReal('conomprest', $reales);
+        if ($nom !== null) {
+            $select[] = 'MAX(`' . $nom . '`) AS `conomprest`';
+        }
+        $orderCol = $this->colReal('coperiodo', $reales);
+        if ($orderCol === null) {
+            $orderCol = $gCols[0];
+        }
+        $sql = 'SELECT ' . implode(',', $select) . ' FROM `' . self::TABLA . '` GROUP BY `'
+            . implode('`,`', $gCols) . '` ORDER BY `' . $orderCol . '` DESC LIMIT 500';
+        $stmt = $this->db->query($sql);
+        $filas = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : array();
+        return array('filas' => $filas, 'tabla_ok' => true);
     }
 
     /**

@@ -314,6 +314,28 @@ class Permission
      * @param  string $clave  CLAVE del permiso (ej: 'MNU_ARC_PRESTADORES').
      * @return string         Valor de ?route= (ej: 'prestadores').
      */
+    /**
+     * ¿Algún permiso de sesión resuelve a este slug de ?route=?
+     *
+     * @param  array  $permisos
+     * @param  string $slug
+     * @return bool
+     */
+    public static function tieneRuta(array $permisos, $slug)
+    {
+        $slug = trim((string) $slug);
+        if ($slug === '') {
+            return false;
+        }
+        foreach ($permisos as $p) {
+            $clave = isset($p['CLAVE']) ? $p['CLAVE'] : '';
+            if ($clave !== '' && self::getRoute($clave) === $slug) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static function getRoute($clave)
     {
         $map = self::_routeMap();

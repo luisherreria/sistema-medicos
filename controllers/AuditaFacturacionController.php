@@ -32,6 +32,24 @@ class AuditaFacturacionController
             array('label' => 'Auditar Facturación'),
         );
         $csrfToken = isset($_SESSION['csrf_token']) ? (string) $_SESSION['csrf_token'] : '';
+        $forzarGrid = isset($_GET['grid']) && (string) $_GET['grid'] === '1';
+        $hayFiltro = ($init['obrasoc'] !== '' || $init['suc'] !== '' || $init['factura'] !== ''
+            || $init['prestador'] !== '' || $init['periodo'] !== '');
+        if (!$hayFiltro && !$forzarGrid) {
+            $tablaOk = true;
+            $errorTabla = '';
+            $facturas = array();
+            try {
+                $sel = (new AuditaFacturacion())->listarFacturas();
+                $facturas = $sel['filas'];
+                $tablaOk = !empty($sel['tabla_ok']);
+            } catch (PDOException $e) {
+                $tablaOk = false;
+                $errorTabla = $e->getMessage();
+            }
+            require_once __DIR__ . '/../views/audita/selector.php';
+            return;
+        }
         $columnas  = $this->columnasGrid();
         $botones   = $this->botonesVisibles();
 
@@ -50,6 +68,7 @@ class AuditaFacturacionController
                 'filas'     => $out['filas'],
                 'totales'   => $out['totales'],
                 'tabla_ok'  => $out['tabla_ok'],
+                'truncado'  => !empty($out['truncado']),
             ), JSON_UNESCAPED_UNICODE);
         } catch (PDOException $e) {
             $this->jsonError('Error al leer audifac2: ' . $e->getMessage());
@@ -749,7 +768,9 @@ class AuditaFacturacionController
             exit;
         }
         $permisos = isset($_SESSION['permisos']) ? $_SESSION['permisos'] : array();
-        if (!Permission::tiene($permisos, self::CLAVE_PERMISO)) {
+        $ok = Permission::tiene($permisos, self::CLAVE_PERMISO)
+            || Permission::tieneRuta($permisos, 'audit-facturacion');
+        if (!$ok) {
             if ($this->isAjax()) {
                 $this->jsonError('Sin permiso para Auditar Facturación.', 403);
             }

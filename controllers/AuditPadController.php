@@ -291,7 +291,17 @@ class AuditPadController
             exit;
         }
         $permisos = isset($_SESSION['permisos']) ? $_SESSION['permisos'] : array();
-        if (!Permission::tiene($permisos, $clave)) {
+        $slug = '';
+        $map = $this->mapa();
+        foreach ($map as $s => $cfg) {
+            if ($cfg['clave'] === $clave) {
+                $slug = $s;
+                break;
+            }
+        }
+        $ok = Permission::tiene($permisos, $clave)
+            || ($slug !== '' && Permission::tieneRuta($permisos, $slug));
+        if (!$ok) {
             if ($this->isAjax()) {
                 $this->jsonError('Sin permiso.', 403);
             }

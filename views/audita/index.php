@@ -378,6 +378,9 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             pintarFilas(res.filas || []);
             pintarTotales(res.totales);
+            if (res.truncado) {
+                showAlert('Se muestran las primeras 4000 filas de audifac2.', true);
+            }
         }).fail(function () {
             showAlert('Error de comunicación al leer audifac2.', false);
         });
