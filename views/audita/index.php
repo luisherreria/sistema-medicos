@@ -311,6 +311,15 @@ document.addEventListener('DOMContentLoaded', function () {
         return n.toFixed(2);
     }
 
+    function fmtFecha(v) {
+        if (v === null || v === undefined) return '';
+        var s = String(v).trim();
+        if (s === '' || s.indexOf('0000-00-00') === 0) return '';
+        var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (m) return m[3] + '/' + m[2] + '/' + m[1];
+        return s;
+    }
+
     function pintarTotales(t) {
         if (!t) return;
         document.getElementById('TEXT1').textContent = fmtNum(t.text1);
@@ -352,6 +361,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 } else if (col.field === 'cofacturad' || col.field === 'coimporte' || col.field === 'cocoseguro' || col.field === 'cosegpres' || col.field === 'difcpre' || col.field === 'liqneg') {
                     td.textContent = fmtNum(val);
                     td.className += ' text-end';
+                } else if (col.field === 'cofeccons' || col.field === 'cofechacar' || /^(\d{4})-(\d{2})-(\d{2})/.test(String(val || ''))) {
+                    td.textContent = fmtFecha(val);
+                    td.className += ' text-nowrap';
                 } else {
                     td.textContent = val === null || val === undefined ? '' : String(val);
                 }
@@ -521,6 +533,36 @@ document.addEventListener('DOMContentLoaded', function () {
                     return;
                 }
                 pintarTotales(res.totales);
+            });
+            return;
+        }
+        if (acc === 'visualizar') {
+            $.ajax({
+                url: apiUrl('visualizar'),
+                method: 'GET',
+                data: initParams(),
+                dataType: 'json',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            }).done(function (res) {
+                if (!res || !res.ok) {
+                    showAlert((res && res.error) || 'No se pudo visualizar.', false);
+                    return;
+                }
+                document.getElementById('vr-prestador').textContent = res.prestador || '';
+                document.getElementById('vr-titulo').textContent = res.titulo || '';
+                document.getElementById('vr-facturado').textContent = 'Total FACTURADO: ' + fmtNum(res.facturado);
+                document.getElementById('vr-liquidado').textContent = 'Total LIQUIDADO: ' + fmtNum(res.liquidado);
+                document.getElementById('vr-cosegpres').textContent = 'Coseguros Prestador: ' + fmtNum(res.cosegpres);
+                document.getElementById('vr-cosegnocob').textContent = 'Coseguro No Cobrados: ' + fmtNum(res.cosegnocob);
+                document.getElementById('vr-debitado').textContent = 'Total DEBITADO: ' + fmtNum(res.debitado);
+                document.getElementById('vr-debito010').textContent = 'Total DEBITO(010): ' + fmtNum(res.debito010);
+                document.getElementById('vr-credito032').textContent = 'Total CREDITO(032): ' + fmtNum(res.credito032);
+                document.getElementById('vr-liqneg').textContent = 'Coseguros NO Decontados: ' + fmtNum(res.liqneg);
+                document.getElementById('vr-neto').textContent = 'Neto Factura Prestador: ' + fmtNum(res.neto);
+                document.getElementById('vr-aviso').textContent = res.aviso || '';
+                abrirModal('modal-resumen');
+            }).fail(function () {
+                showAlert('Error de comunicación al visualizar.', false);
             });
             return;
         }

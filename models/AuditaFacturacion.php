@@ -425,6 +425,187 @@ class AuditaFacturacion
     }
 
     /**
+     * btnver.Click: preimpresion (SCAN en memoria, sin COPY TO) + cntResumen1.
+     * FRX liqprestRSM/liqprestNRS está comentado en el SCT.
+     *
+     * @param  array  $filtros
+     * @param  string $nombre
+     * @return array
+     */
+    public function visualizar(array $filtros, $nombre = '')
+    {
+        $list = $this->listar($filtros);
+        if (empty($list['tabla_ok'])) {
+            return array(
+                'ok'    => false,
+                'error' => isset($list['error']) && (string) $list['error'] !== ''
+                    ? (string) $list['error']
+                    : $this->ultimoError(),
+            );
+        }
+        $tipos = $this->mapaTipoDebito();
+        $tfacturad = 0;
+        $tdebitado = 0;
+        $tcoseguro = 0;
+        $tcosegurop = 0;
+        $tliqneg = 0;
+        $tcoliquidaver = 0;
+        $tdebita1 = 0;
+        $tdeb032 = 0;
+        $filas = isset($list['filas']) ? $list['filas'] : array();
+        $i = 0;
+        $n = count($filas);
+        for ($i = 0; $i < $n; $i++) {
+            $row = $filas[$i];
+            $cant = (float) $this->cell($row, 'cocantpres');
+            $origFact = (float) $this->cell($row, 'cofacturad');
+            $origImp  = (float) $this->cell($row, 'coimporte');
+            $origCos  = (float) $this->cell($row, 'cocoseguro');
+            $origCpr  = (float) $this->cell($row, 'cosegpres');
+            $exc = $this->esFlag($this->cell($row, 'coexccos'));
+            $deb = trim((string) $this->cell($row, 'codebito'));
+
+            $cofacturad = $origFact * $cant;
+            $coimporte  = $origImp * $cant;
+            $codebitado = $origFact - $origImp;
+            $coliquidad = $origImp * $cant;
+            $cocoseguro = $origCos * $cant;
+            $cosegpres  = $origCpr * $cant;
+
+            $tipodeb = 'X';
+            if ($deb !== '' && isset($tipos[$deb])) {
+                $tipodeb = $tipos[$deb];
+                if ($tipodeb === 'P') {
+                    $codebitado = $cofacturad - $coimporte;
+                } elseif ($tipodeb === 'T') {
+                    $codebitado = $cofacturad;
+                } elseif ($tipodeb === 'E') {
+                    $codebitado = 0;
+                }
+            }
+
+            if ($exc) {
+                $coliquidad = $cofacturad - $codebitado;
+            } elseif ($cosegpres < 1 && strlen($deb) > 2 && $deb !== '010') {
+                $coliquidad = $cofacturad - $codebitado;
+                $cocoseguro = 0;
+            } else {
+                $coliquidad = ($cofacturad - $cocoseguro) - $codebitado;
+            }
+
+            if (($cosegpres - $cocoseguro) > 0) {
+                $coliquidad = $coliquidad - ($cosegpres - $cocoseguro);
+            }
+
+            $coporque = 0;
+            if ($deb === '032') {
+                $coporque = $coliquidad;
+                $coliquidad = 0;
+            }
+            if ($deb !== '' && $tipodeb === 'T') {
+                $coliquidad = 0;
+            }
+
+            $tfacturad += $cofacturad;
+            $tdebitado += $codebitado;
+            if (!$exc) {
+                $tcoseguro += $cocoseguro;
+                $tcosegurop += $cosegpres;
+            }
+            $tliqneg += (float) $this->cell($row, 'liqneg');
+            $tcoliquidaver += $coliquidad;
+            if ($deb === '010') {
+                $tdebita1 += $codebitado;
+            }
+            if ($deb === '032') {
+                $tdeb032 += $coporque;
+            }
+        }
+
+        $tdifecoseguro = 0;
+        if ($tcosegurop < $tcoseguro) {
+            $tdifecoseguro = abs($tcosegurop - $tcoseguro);
+        }
+
+        $tot = isset($list['totales']) ? $list['totales'] : $this->totalesVacios();
+        $text10 = isset($tot['text10']) ? (float) $tot['text10'] : 0;
+        $comparaneto = 'MENOR';
+        if ($text10 < $tcoliquidaver && $text10 > 0) {
+            $comparaneto = 'MAYOR';
+        }
+        if ($tcoliquidaver < 0) {
+            $tcoliquidaver = 0;
+            $comparaneto = 'MENOR';
+        }
+
+        $periodo = isset($filtros['periodo']) ? trim((string) $filtros['periodo']) : '';
+        $obrasoc = isset($filtros['obrasoc']) ? trim((string) $filtros['obrasoc']) : '';
+        if ($nombre === '') {
+            $nombre = isset($filtros['nombre']) ? trim((string) $filtros['nombre']) : '';
+        }
+
+        return array(
+            'ok'          => true,
+            'prestador'   => ' Prestador: ' . $nombre,
+            'titulo'      => ' Totales de Liquidacion ' . $periodo . ' ' . $obrasoc . ' es ' . $comparaneto,
+            'facturado'   => $tfacturad,
+            'liquidado'   => $tcoliquidaver,
+            'cosegpres'   => $tcosegurop,
+            'cosegnocob'  => $tdifecoseguro,
+            'debitado'    => $tdebitado,
+            'debito010'   => $tdebita1,
+            'credito032'  => $tdeb032,
+            'liqneg'      => $tliqneg,
+            'neto'        => $text10,
+            'comparaneto' => $comparaneto,
+            'aviso'       => '* Recuerde que el Total Liquidado no puede superar al Neto Factura Prestador',
+        );
+    }
+
+    /**
+     * TABLAS ORDER TDEB / TATIPODEB (P parcial, T total, E evitable).
+     *
+     * @return array codigo => tipo
+     */
+    private function mapaTipoDebito()
+    {
+        $out = array();
+        $fis = $this->tablaFisica('tablas');
+        if ($fis === '') {
+            return $out;
+        }
+        $cols = $this->columnasDeTabla($fis);
+        $cCod = $this->colEn($cols, 'tacodigo');
+        $cTip = $this->colEn($cols, 'tatipodeb');
+        if ($cCod === null || $cTip === null) {
+            return $out;
+        }
+        $sql = 'SELECT `' . $cCod . '` AS `tacodigo`, `' . $cTip . '` AS `tatipodeb` FROM '
+            . $this->sqlIdent($fis);
+        $cTipo = $this->colEn($cols, 'tatipo');
+        if ($cTipo !== null) {
+            $sql .= ' WHERE `' . $cTipo . '` = \'DEB\'';
+        }
+        $sql .= ' LIMIT 2000';
+        try {
+            $stmt = $this->db->query($sql);
+        } catch (PDOException $e) {
+            return $out;
+        }
+        if (!$stmt) {
+            return $out;
+        }
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $cod = trim((string) $this->cell($row, 'tacodigo'));
+            $tip = strtoupper(trim((string) $this->cell($row, 'tatipodeb')));
+            if ($cod !== '') {
+                $out[$cod] = $tip;
+            }
+        }
+        return $out;
+    }
+
+    /**
      * Check3: REPLACE ALL sedacion WITH .T. FOR !empty(codebito).
      *
      * @param  array $filtros

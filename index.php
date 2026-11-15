@@ -207,6 +207,7 @@ switch ($route) {
         switch ($action) {
             case 'listado':          $controller->listado();         break;
             case 'recalc':           $controller->recalc();          break;
+            case 'visualizar':       $controller->visualizar();      break;
             case 'marcar_todo':      $controller->marcarTodo();      break;
             case 'marcar_todo_a':    $controller->marcarTodoA();     break;
             case 'toggle_coselecc':  $controller->toggleCoselecc();  break;

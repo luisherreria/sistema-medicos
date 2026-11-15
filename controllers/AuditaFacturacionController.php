@@ -110,6 +110,24 @@ class AuditaFacturacionController
         exit;
     }
 
+    /**
+     * btnver Visualizar — cntResumen1. Sin COPY TO imprime ni FRX.
+     */
+    public function visualizar()
+    {
+        $this->requireModulo();
+        header('Content-Type: application/json; charset=utf-8');
+        $init = $this->initParams();
+        $model = new AuditaFacturacion();
+        try {
+            $out = $model->visualizar($init, $init['nombre']);
+            echo json_encode($out, JSON_UNESCAPED_UNICODE);
+        } catch (PDOException $e) {
+            $this->jsonError('Error al visualizar: ' . $e->getMessage());
+        }
+        exit;
+    }
+
     public function marcarTodo()
     {
         $this->requireModulo();
@@ -746,7 +764,7 @@ class AuditaFacturacionController
             array('name' => 'Command12', 'caption' => 'Ajustes de ValorImpositivo', 'accion' => 'doform', 'form' => 'ajusfact'),
             array('name' => 'btnverautorizaciones', 'caption' => 'Selecciona Autorizacion', 'accion' => 'doform', 'form' => 'pedirauto1'),
             array('name' => 'Command45', 'caption' => 'Ajusta Valor Importe', 'accion' => 'doform', 'form' => 'ajusfact'),
-            array('name' => 'btnver',    'caption' => 'Visualizar', 'accion' => 'doform', 'form' => ''),
+            array('name' => 'btnver',    'caption' => 'Visualizar', 'accion' => 'visualizar'),
             array('name' => 'Command3',  'caption' => 'Borrar Consulta', 'accion' => 'doform', 'form' => ''),
             array('name' => 'Command10', 'caption' => 'Recalcular Importes', 'accion' => 'doform', 'form' => ''),
             array('name' => 'Command6',  'caption' => 'Borra Prestacion', 'accion' => 'doform', 'form' => ''),

@@ -9,6 +9,19 @@ if (!function_exists('audita_h')) {
         return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
     }
 }
+if (!function_exists('audita_fecha')) {
+    function audita_fecha($v)
+    {
+        $s = trim((string) $v);
+        if ($s === '' || strpos($s, '0000-00-00') === 0) {
+            return '';
+        }
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $s, $m)) {
+            return $m[3] . '/' . $m[2] . '/' . $m[1];
+        }
+        return $s;
+    }
+}
 if (!function_exists('audita_cell')) {
     function audita_cell($row, $col)
     {
@@ -159,12 +172,12 @@ require_once __DIR__ . '/../../views/layouts/header.php';
                             echo '<td>' . audita_h($os) . '</td>';
                             echo '<td>' . audita_h($suc) . '</td>';
                             echo '<td>' . audita_h($fac) . '</td>';
-                            echo '<td>' . audita_h((string) audita_cell($r, 'cofecfac')) . '</td>';
+                            echo '<td>' . audita_h(audita_fecha(audita_cell($r, 'cofecfac'))) . '</td>';
                             echo '<td>' . audita_h((string) audita_cell($r, 'conetofact')) . '</td>';
                             echo '<td>' . audita_h((string) audita_cell($r, 'coivafact')) . '</td>';
                             echo '<td>' . audita_h((string) audita_cell($r, 'cototalfac')) . '</td>';
                             echo '<td>' . audita_h((string) audita_cell($r, 'cosegurofa')) . '</td>';
-                            echo '<td>' . audita_h((string) audita_cell($r, 'cofecnac')) . '</td>';
+                            echo '<td>' . audita_h(audita_fecha(audita_cell($r, 'cofecnac'))) . '</td>';
                             echo '<td>' . ($isPag ? 'Sí' : '') . '</td>';
                             echo '</tr>';
                         }

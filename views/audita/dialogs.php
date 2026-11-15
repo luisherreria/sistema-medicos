@@ -257,6 +257,33 @@ if (!function_exists('audita_h')) {
     </div>
 </div>
 
+<div class="modal fade" id="modal-resumen" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background:#15b5ea; max-width:472px;">
+            <div class="modal-header py-2 bg-white">
+                <h6 class="modal-title mb-0 fw-bold" id="vr-prestador">Prestador:</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" style="color:#400040;">
+                <p class="fw-bold text-end mb-3" id="vr-titulo"></p>
+                <p class="fw-bold text-end mb-1" id="vr-facturado"></p>
+                <p class="fw-bold text-end mb-1" id="vr-liquidado"></p>
+                <p class="fw-bold text-end mb-1" id="vr-cosegpres"></p>
+                <p class="fw-bold text-end mb-1" id="vr-cosegnocob"></p>
+                <p class="fw-bold text-end mb-1" id="vr-debitado"></p>
+                <p class="fw-bold text-end mb-1" id="vr-debito010"></p>
+                <p class="fw-bold text-end mb-1" id="vr-credito032"></p>
+                <p class="fw-bold text-end mb-3" id="vr-liqneg"></p>
+                <p class="fw-bold text-end mb-3" id="vr-neto"></p>
+                <p class="fw-bold small mb-0" id="vr-aviso"></p>
+            </div>
+            <div class="modal-footer py-2 border-0 justify-content-center">
+                <button type="button" class="btn btn-sm btn-primary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="modal-debitar" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-lg modal-dialog-centered" style="max-width:631px;">
         <div class="modal-content">
