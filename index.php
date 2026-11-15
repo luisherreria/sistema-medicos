@@ -48,6 +48,25 @@ if (empty($_SESSION['csrf_token'])) {
 $route  = isset($_GET['route']) ? trim($_GET['route']) : '';
 $method = isset($_SERVER['REQUEST_METHOD']) ? strtoupper($_SERVER['REQUEST_METHOD']) : 'GET';
 
+$routeAliases = array(
+    'mnu_aud_auditar'     => 'audit-facturacion',
+    'mnu-aud-auditar'     => 'audit-facturacion',
+    'mnu_af_auditar'      => 'audit-facturacion',
+    'mnu-af-auditar'      => 'audit-facturacion',
+    'MNU_AUD_AUDITAR'     => 'audit-facturacion',
+    'MNU_AF_AUDITAR'      => 'audit-facturacion',
+    'auditar-facturacion' => 'audit-facturacion',
+    'audita'              => 'audit-facturacion',
+);
+if (isset($routeAliases[$route])) {
+    $route = $routeAliases[$route];
+} else {
+    $norm = strtolower(str_replace('_', '-', $route));
+    if (isset($routeAliases[$norm])) {
+        $route = $routeAliases[$norm];
+    }
+}
+
 /**
  * Carga un controller solo cuando la ruta lo necesita.
  *
@@ -142,6 +161,9 @@ switch ($route) {
     // ── Audit. Facturac. → Auditar Facturación (form AUDITA / audifac2) ──
     case 'audit-facturacion':
     case 'MNU_AF_AUDITAR':
+    case 'MNU_AUD_AUDITAR':
+    case 'mnu_aud_auditar':
+    case 'mnu-aud-auditar':
         requireController('AuditaFacturacionController.php');
         $controller = new AuditaFacturacionController();
         $action     = isset($_GET['action']) ? trim($_GET['action']) : '';

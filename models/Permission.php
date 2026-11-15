@@ -75,12 +75,47 @@ class Permission
      */
     public static function tiene(array $permisos, $clave)
     {
+        $equivalentes = self::clavesEquivalentes($clave);
         foreach ($permisos as $p) {
-            if (isset($p['CLAVE']) && $p['CLAVE'] === $clave) {
-                return true;
+            if (!isset($p['CLAVE'])) {
+                continue;
+            }
+            $c = strtoupper(trim((string) $p['CLAVE']));
+            $i = 0;
+            $n = count($equivalentes);
+            for ($i = 0; $i < $n; $i++) {
+                if ($c === $equivalentes[$i]) {
+                    return true;
+                }
             }
         }
         return false;
+    }
+
+    /**
+     * CLAVEs de BD que apuntan al mismo módulo (hosting usa MNU_AUD_AUDITAR).
+     *
+     * @param  string $clave
+     * @return string[]
+     */
+    public static function clavesEquivalentes($clave)
+    {
+        $clave = strtoupper(trim((string) $clave));
+        $grupos = array(
+            array('MNU_AF_AUDITAR', 'MNU_AUD_AUDITAR'),
+        );
+        $g = 0;
+        $ng = count($grupos);
+        for ($g = 0; $g < $ng; $g++) {
+            $i = 0;
+            $n = count($grupos[$g]);
+            for ($i = 0; $i < $n; $i++) {
+                if ($grupos[$g][$i] === $clave) {
+                    return $grupos[$g];
+                }
+            }
+        }
+        return array($clave);
     }
 
     /**
@@ -282,9 +317,46 @@ class Permission
     public static function getRoute($clave)
     {
         $map = self::_routeMap();
-        return isset($map[$clave])
-            ? $map[$clave]
-            : strtolower(str_replace('_', '-', $clave));
+        if (isset($map[$clave])) {
+            return $map[$clave];
+        }
+        $upper = strtoupper(trim((string) $clave));
+        if (isset($map[$upper])) {
+            return $map[$upper];
+        }
+        return strtolower(str_replace('_', '-', $clave));
+    }
+
+    /**
+     * Normaliza ?route= (CLAVE, mnu_aud_auditar, etc.) al slug del switch.
+     *
+     * @param  string $route
+     * @return string
+     */
+    public static function canonicalizeRoute($route)
+    {
+        $route = trim((string) $route);
+        if ($route === '') {
+            return $route;
+        }
+        $fromClave = self::getRoute($route);
+        if ($fromClave !== strtolower(str_replace('_', '-', $route))) {
+            return $fromClave;
+        }
+        $norm = strtolower(str_replace('_', '-', $route));
+        $aliases = array(
+            'mnu-aud-auditar'      => 'audit-facturacion',
+            'mnu-af-auditar'       => 'audit-facturacion',
+            'auditar-facturacion'  => 'audit-facturacion',
+            'audita'               => 'audit-facturacion',
+        );
+        if (isset($aliases[$norm])) {
+            return $aliases[$norm];
+        }
+        if (isset($aliases[$route])) {
+            return $aliases[$route];
+        }
+        return $route;
     }
 
     /**
@@ -383,6 +455,7 @@ class Permission
             'MNU_AUT_AUTORIZACIONES'  => 'autorizaciones',
             // ── AUDIT. FACTURAC. ──────────────────────────────────────────
             'MNU_AF_AUDITAR'          => 'audit-facturacion',
+            'MNU_AUD_AUDITAR'         => 'audit-facturacion',
             'MNU_AF_CIERRE_AUTO'      => 'cierre-automatico',
             'MNU_AF_LIQ_AUDITAR'      => 'liq-auditar',
             'MNU_AF_LIQ_SIN_CERRAR'   => 'liq-sin-cerrar',
