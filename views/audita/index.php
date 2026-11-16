@@ -29,6 +29,29 @@ if (!function_exists('audita_caption')) {
         return str_replace('\\', '', (string) $s);
     }
 }
+if (!function_exists('audita_boton')) {
+    /**
+     * @param array  $b
+     * @param string $extraClass
+     */
+    function audita_boton($b, $extraClass)
+    {
+        if (empty($b) || !empty($b['sep'])) {
+            return;
+        }
+        $acc  = isset($b['accion']) ? $b['accion'] : '';
+        $form = isset($b['form']) ? $b['form'] : '';
+        $ord  = isset($b['orden']) ? $b['orden'] : '';
+        $cls  = 'btn btn-sm af-btn ' . $extraClass;
+        echo '<button type="button" class="' . $cls . '"';
+        echo ' data-name="' . audita_h(isset($b['name']) ? $b['name'] : '') . '"';
+        echo ' data-accion="' . audita_h($acc) . '"';
+        echo ' data-form="' . audita_h($form) . '"';
+        echo ' data-orden="' . audita_h($ord) . '">';
+        echo audita_h(audita_caption(isset($b['caption']) ? $b['caption'] : ''));
+        echo '</button>';
+    }
+}
 
 $obrasoc    = isset($init['obrasoc']) ? $init['obrasoc'] : '';
 $suc        = isset($init['suc']) ? $init['suc'] : '';
@@ -175,12 +198,68 @@ require_once __DIR__ . '/../../views/layouts/header.php';
     background: #fff;
     color: #212529;
 }
+.af-barra-nueva {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    align-items: stretch;
+}
+.af-barra-col {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 170px;
+    flex: 1 1 170px;
+    max-width: 240px;
+}
+.af-barra-col .btn {
+    width: 100%;
+    text-align: left;
+    white-space: nowrap;
+}
+.af-barra-slot {
+    min-height: 31px;
+}
+#af-popmenu {
+    position: fixed;
+    z-index: 1080;
+    min-width: 230px;
+    display: none;
+    background: #fff;
+    border: 1px solid #8a97ab;
+    box-shadow: 2px 4px 14px rgba(0,0,0,.28);
+    padding: 4px 0;
+    border-radius: 4px;
+}
+#af-popmenu .af-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: 0 !important;
+    border-radius: 0;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 5px 16px;
+    font-size: 0.84rem;
+    color: #1a2332;
+}
+#af-popmenu .af-btn:hover,
+#af-popmenu .af-btn:focus {
+    background: #2b579a !important;
+    color: #fff !important;
+}
+#af-popmenu .af-pop-sep {
+    height: 1px;
+    background: #c5d0de;
+    margin: 4px 10px;
+}
 </style>
 
 <div class="card card-module mb-2">
     <div class="card-header py-2 d-flex align-items-center justify-content-between flex-wrap gap-2">
         <span style="font-size:0.88rem;">
             <i class="fa-solid fa-table me-2"></i>Grid1 — audifac2
+            <span class="ms-2 fw-normal" style="font-size:0.75rem;opacity:.85;">(click derecho: menú de la fila)</span>
         </span>
         <div class="gss-search-wrap af-grid-search">
             <i class="fa-solid fa-magnifying-glass text-white-50"></i>
@@ -246,34 +325,115 @@ require_once __DIR__ . '/../../views/layouts/header.php';
     </div>
 </div>
 
-<div class="card border-0 shadow-sm mb-3" style="border-radius:10px;">
+<?php
+$botonesNueva = array();
+$botonesPopup = array();
+$botonesViejos = array();
+$bi = 0;
+$bn = count($botones);
+for ($bi = 0; $bi < $bn; $bi++) {
+    $b = $botones[$bi];
+    $menu = isset($b['menu']) ? $b['menu'] : 'vieja';
+    if ($menu === 'nueva') {
+        $botonesNueva[] = $b;
+    } elseif ($menu === 'popup') {
+        $botonesPopup[] = $b;
+        if (!empty($b['sep_after'])) {
+            $botonesPopup[] = array('sep' => true);
+        }
+    } else {
+        $botonesViejos[] = $b;
+    }
+}
+$nuevaCols = array();
+$ci = 0;
+for ($ci = 0; $ci < 4; $ci++) {
+    $nuevaCols[$ci] = array(0 => null, 1 => null);
+}
+$ni = 0;
+$nn = count($botonesNueva);
+for ($ni = 0; $ni < $nn; $ni++) {
+    $nb = $botonesNueva[$ni];
+    $col = isset($nb['col']) ? (int) $nb['col'] : 0;
+    $fila = isset($nb['fila']) ? (int) $nb['fila'] : 0;
+    if ($col < 0 || $col > 3) {
+        $col = 0;
+    }
+    if ($fila < 0 || $fila > 1) {
+        $fila = 0;
+    }
+    $nuevaCols[$col][$fila] = $nb;
+}
+?>
+
+<div class="card border-0 shadow-sm mb-2" style="border-radius:10px;">
     <div class="card-body py-2 px-3">
-        <div class="d-flex flex-wrap gap-1">
+        <div class="af-barra-nueva">
             <?php
-            $bi = 0;
-            $bn = count($botones);
-            for ($bi = 0; $bi < $bn; $bi++) {
-                $b = $botones[$bi];
-                $acc = isset($b['accion']) ? $b['accion'] : '';
-                $form = isset($b['form']) ? $b['form'] : '';
-                $ord  = isset($b['orden']) ? $b['orden'] : '';
-                $cls  = 'btn btn-sm btn-outline-secondary';
-                if ($acc === 'recalc') {
-                    $cls = 'btn btn-sm btn-primary';
-                } elseif ($acc === 'salir') {
-                    $cls = 'btn btn-sm btn-outline-danger';
+            $clsNueva = array(
+                'Command38' => 'btn-outline-danger',
+                'Command37' => 'btn-outline-success',
+                'Command11' => 'btn-primary',
+            );
+            $ci = 0;
+            for ($ci = 0; $ci < 4; $ci++) {
+                echo '<div class="af-barra-col">';
+                $fi = 0;
+                for ($fi = 0; $fi < 2; $fi++) {
+                    $slot = $nuevaCols[$ci][$fi];
+                    if ($slot) {
+                        $nom = isset($slot['name']) ? $slot['name'] : '';
+                        $extra = isset($clsNueva[$nom]) ? $clsNueva[$nom] : 'btn-outline-secondary';
+                        audita_boton($slot, $extra);
+                    } else {
+                        echo '<div class="af-barra-slot"></div>';
+                    }
                 }
-                echo '<button type="button" class="' . $cls . ' af-btn"';
-                echo ' data-name="' . audita_h($b['name']) . '"';
-                echo ' data-accion="' . audita_h($acc) . '"';
-                echo ' data-form="' . audita_h($form) . '"';
-                echo ' data-orden="' . audita_h($ord) . '">';
-                echo audita_h(audita_caption($b['caption']));
-                echo '</button>';
+                echo '</div>';
             }
             ?>
         </div>
     </div>
+</div>
+
+<?php if (!empty($botonesViejos)) { ?>
+<div class="card border-0 shadow-sm mb-3" style="border-radius:10px;">
+    <div class="card-body py-2 px-3">
+        <div class="small text-muted mb-1">Otras acciones (se van acomodando; esta barra desaparece cuando queden todas ubicadas)</div>
+        <div class="d-flex flex-wrap gap-1">
+            <?php
+            $vi = 0;
+            $vn = count($botonesViejos);
+            for ($vi = 0; $vi < $vn; $vi++) {
+                $b = $botonesViejos[$vi];
+                $acc = isset($b['accion']) ? $b['accion'] : '';
+                $extra = 'btn-outline-secondary';
+                if ($acc === 'recalc') {
+                    $extra = 'btn-primary';
+                } elseif ($acc === 'salir') {
+                    $extra = 'btn-outline-danger';
+                }
+                audita_boton($b, $extra);
+            }
+            ?>
+        </div>
+    </div>
+</div>
+<?php } ?>
+
+<div id="af-popmenu" role="menu">
+    <?php
+    $pi = 0;
+    $pn = count($botonesPopup);
+    for ($pi = 0; $pi < $pn; $pi++) {
+        $p = $botonesPopup[$pi];
+        if (!empty($p['sep'])) {
+            echo '<div class="af-pop-sep"></div>';
+            continue;
+        }
+        audita_boton($p, '');
+    }
+    ?>
 </div>
 
 <?php require_once __DIR__ . '/dialogs.php'; ?>
@@ -531,7 +691,40 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('tbl-audita').style.fontSize = n + 'pt';
     });
 
-    $('.af-btn').on('click', function () {
+    function hidePop() {
+        var el = document.getElementById('af-popmenu');
+        if (el) el.style.display = 'none';
+    }
+    function showPop(x, y) {
+        var el = document.getElementById('af-popmenu');
+        if (!el) return;
+        el.style.display = 'block';
+        var w = el.offsetWidth;
+        var h = el.offsetHeight;
+        var vx = window.innerWidth;
+        var vy = window.innerHeight;
+        if (x + w > vx - 4) x = vx - w - 8;
+        if (y + h > vy - 4) y = vy - h - 8;
+        if (x < 4) x = 4;
+        if (y < 4) y = 4;
+        el.style.left = x + 'px';
+        el.style.top = y + 'px';
+    }
+
+    $('#tbl-audita tbody').on('contextmenu', 'tr', function (e) {
+        e.preventDefault();
+        $(this).trigger('click');
+        showPop(e.clientX, e.clientY);
+    });
+    $(document).on('click', function (e) {
+        if ($(e.target).closest('#af-popmenu').length) return;
+        hidePop();
+    });
+    $('.af-grid-scroll').on('scroll', hidePop);
+    $(window).on('resize', hidePop);
+
+    $(document).on('click', '.af-btn', function () {
+        hidePop();
         var acc = $(this).attr('data-accion');
         var form = $(this).attr('data-form');
         var ord = $(this).attr('data-orden');
